@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}{{ business.name }} · Lead Finder{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
+{% block content %}
+<a href="{{ url_for('web.businesses') }}" id="back-link" class="btn btn-sm btn-ghost mb-3 ps-0">
+  <i class="bi bi-arrow-left"></i> All leads
+</a>
+
+<div id="detail" data-business-id="{{ business.id }}">
+  <div class="card mb-4">
+    <div class="card-body p-4">
+      <div class="detail-hero">
+        <div>
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+            <h1 class="h3 fw-bold mb-0" id="b-name">{{ business.name }}</h1>
+            <span id="b-status"></span>
+            <span id="b-claimed"></span>
+          </div>
+          <div class="text-body-secondary" id="b-subtitle"></div>
+        </div>
+        <div class="d-flex flex-wrap gap-2" id="b-actions"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-7 d-flex flex-column gap-4">
+      <div class="card">
+        <div class="card-header">
+          <div class="section-title">Contact details</div>
+          <p class="section-hint">Collected from Google Maps and their website. You can correct them in <em>Your notes</em>.</p>
+        </div>
+        <div class="card-body py-1" id="b-contact"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <div class="section-title"><i class="bi bi-instagram"></i> Social media</div>
+            <p class="section-hint">Accounts this business links to. Look at them before calling: old or empty pages are a good conversation starter.</p>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="find-socials-btn">
+            <i class="bi bi-search"></i> <span>Find accounts</span>
+          </button>
+        </div>
+        <div id="b-socials"></div>
+        <form class="card-footer bg-transparent" id="social-add-form">
+          <div class="input-group input-group-sm">
+            <span class="input-group-text bg-transparent"><i class="bi bi-link-45deg"></i></span>
+            <input id="social-url" type="text" class="form-control"
+              placeholder="Found one yourself? Paste the Facebook, Instagram or TikTok link">
+            <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-plus-lg"></i> Add</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <div class="section-title"><i class="bi bi-window-sidebar"></i> Website check</div>
+            <p class="section-hint">A quick look at their website. Problems here are things you can offer to help with.</p>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-primary" id="check-website-btn">
+            <i class="bi bi-search"></i> <span>Check website</span>
+          </button>
+        </div>
+        <div id="b-website-check"></div>
+      </div>
+
+      <div class="row g-4">
+        <div class="col-md-6">
+          <div class="card h-100">
+            <div class="card-header"><div class="section-title"><i class="bi bi-clock"></i> Opening hours</div>
+              <p class="section-hint">Best to call while they're open but not busy.</p></div>
+            <div class="card-body p-0" id="b-hours"></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card h-100">
+            <div class="card-header"><div class="section-title"><i class="bi bi-map"></i> Location</div></div>
+            <div class="card-body p-2"><div id="detail-map"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card border-danger-subtle">
+        <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+          <div>
+            <div class="section-title">Remove this lead</div>
+            <p class="section-hint">Deletes the business, your notes and its call history. A future search may find it again.</p>
+          </div>
+          <button id="delete-btn" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete lead</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5 d-flex flex-column gap-4">
+      <form id="call-form" class="card">
+        <div class="card-header">
+          <div class="section-title"><i class="bi bi-telephone-plus"></i> Log a call</div>
+          <p class="section-hint">After calling, pick what happened. The lead's status updates automatically.</p>
+        </div>
+        <div class="card-body">
+          <div class="d-flex flex-column gap-2 mb-3" id="call-outcomes"></div>
+          <textarea id="call-note" class="form-control mb-3" rows="2" placeholder="Optional note, e.g. spoke to Nino, send prices by Friday"></textarea>
+          <button type="submit" class="btn btn-primary w-100" id="call-submit" disabled>
+            <i class="bi bi-check2-circle"></i> Save this call
+          </button>
+        </div>
+      </form>
+
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <div>
+            <div class="section-title"><i class="bi bi-list-check"></i> History</div>
+            <p class="section-hint">Calls and emails, newest first. Logged a call by mistake? Delete it to undo.</p>
+          </div>
+          <span class="badge text-bg-secondary" id="call-count"></span>
+        </div>
+        <div id="call-history"></div>
+      </div>
+
+      <form id="lead-form" class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <div>
+            <div class="section-title"><i class="bi bi-journal-text"></i> Your notes</div>
+            <p class="section-hint">Private to you. Remember to save.</p>
+          </div>
+          <span id="lead-dirty" class="small text-warning-emphasis d-none"><span class="unsaved-dot"></span>Unsaved changes</span>
+        </div>
+        <div class="card-body">
+          <label class="form-label small mb-1" for="lead-status">Status</label>
+          <select id="lead-status" class="form-select mb-1"></select>
+          <div class="small text-body-secondary mb-3" id="lead-status-help"></div>
+
+          <label class="form-label small mb-1" for="lead-followup">
+            Follow up on
+            <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+               title="A reminder date. Leads due today or earlier show up under 'Follow-ups due' on the Leads page."></i>
+          </label>
+          <div class="input-group mb-1">
+            <input id="lead-followup" type="date" class="form-control">
+            <button class="btn btn-outline-secondary" type="button" id="clear-followup" title="Clear date"><i class="bi bi-x-lg"></i></button>
+          </div>
+          <div class="d-flex flex-wrap gap-1 mb-3">
+            <button type="button" class="btn btn-sm btn-ghost" data-followup-days="1">Tomorrow</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-followup-days="3">In 3 days</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-followup-days="7">Next week</button>
+            <button type="button" class="btn btn-sm btn-ghost" data-followup-days="30">Next month</button>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-sm-6">
+              <label class="form-label small mb-1" for="lead-phone">Phone</label>
+              <input id="lead-phone" type="tel" class="form-control">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label small mb-1" for="lead-email">Email</label>
+              <input id="lead-email" type="email" class="form-control" placeholder="If you get one">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label small mb-1" for="lead-whatsapp">WhatsApp</label>
+              <input id="lead-whatsapp" type="tel" class="form-control" placeholder="If different from phone">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label small mb-1" for="lead-website">Website</label>
+              <input id="lead-website" type="url" class="form-control" placeholder="https://">
+            </div>
+          </div>
+
+          <label class="form-label small mb-1" for="lead-notes">Notes</label>
+          <textarea id="lead-notes" class="form-control mb-3" rows="4"
+            placeholder="Owner's name, what they need, prices discussed…"></textarea>
+          <button type="submit" class="btn btn-primary" id="lead-save"><i class="bi bi-save"></i> Save notes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="message-modal" tabindex="-1" aria-labelledby="message-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title h5 fw-bold" id="message-title">Send a message</h2>
+          <div class="small text-body-secondary">Pick a ready text, adjust it if you like, then open the app to send it.</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-label small mb-1">Send with</div>
+        <div class="row g-2 mb-3" id="message-channels"></div>
+
+        <div class="d-flex justify-content-between align-items-end mb-1">
+          <label class="form-label small mb-0" for="message-template">Template</label>
+          <a class="small" href="{{ url_for('web.templates') }}" target="_blank">Edit templates <i class="bi bi-box-arrow-up-right"></i></a>
+        </div>
+        <select id="message-template" class="form-select mb-3"></select>
+
+        <div id="message-subject-wrap" class="row g-2 mb-3 d-none">
+          <div class="col-sm-5">
+            <label class="form-label small mb-1" for="message-to">To</label>
+            <input id="message-to" type="email" class="form-control">
+          </div>
+          <div class="col-sm-7">
+            <label class="form-label small mb-1" for="message-subject">Subject</label>
+            <input id="message-subject" type="text" class="form-control" maxlength="255">
+          </div>
+        </div>
+
+        <label class="form-label small mb-1" for="message-text">Message</label>
+        <textarea id="message-text" class="form-control" rows="6"></textarea>
+        <div class="small text-body-secondary mt-2" id="message-hint"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-outline-secondary" id="message-copy"><i class="bi bi-clipboard"></i> Copy text</button>
+        <a class="btn btn-primary" id="message-send" target="_blank" rel="noopener noreferrer"></a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{{ url_for('web.static', filename='js/business_detail.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Tests & tooling
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets and local settings
+.env
+.flaskenv
+
+# Local data: the database, the browser profile (holds your Google cookies),
+# logs, scraper state and mail_settings.json (holds your Gmail App Password).
+instance/*
+!instance/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+*.log
+
+# Editors & OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

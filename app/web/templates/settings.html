@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Settings · Lead Finder{% endblock %}
+
+{% block page_header %}
+<div class="page-header">
+  <h1>Settings</h1>
+  <p>Connect your Gmail so the <em>Email</em> button on a lead sends the message straight from this app.</p>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-7">
+    <form class="card" id="mail-form" autocomplete="off">
+      <div class="card-header d-flex justify-content-between align-items-center gap-2">
+        <div>
+          <div class="section-title"><i class="bi bi-envelope-at"></i> Send emails from Gmail</div>
+          <p class="section-hint">Emails go out from your own address, and you'll find them in your Gmail <em>Sent</em> folder.</p>
+        </div>
+        <span id="mail-status"></span>
+      </div>
+      <div class="card-body">
+        <label class="form-label small mb-1" for="mail-address">Gmail address</label>
+        <input id="mail-address" type="email" class="form-control mb-3" placeholder="you@gmail.com" required>
+
+        <label class="form-label small mb-1" for="mail-password">
+          App Password
+          <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+             title="A special 16-letter password Google makes for one app. Your normal Gmail password won't work here, and an App Password can't be used to sign in to your Google account."></i>
+        </label>
+        <input id="mail-password" type="password" class="form-control mb-1" placeholder="abcd efgh ijkl mnop"
+          autocomplete="new-password" spellcheck="false">
+        <div class="small text-body-secondary mb-3" id="mail-password-help">Not your normal Gmail password. See the steps on the right.</div>
+
+        <label class="form-label small mb-1" for="mail-name">Your name <span class="text-body-tertiary">(optional)</span></label>
+        <input id="mail-name" type="text" class="form-control mb-3" placeholder="Shown to the person you email, e.g. Luka Varsimashvili" maxlength="120">
+
+        <div class="d-flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-primary" id="mail-save"><i class="bi bi-plug"></i> <span>Connect Gmail</span></button>
+          <button type="button" class="btn btn-outline-secondary d-none" id="mail-test"><i class="bi bi-send"></i> Send me a test email</button>
+          <button type="button" class="btn btn-ghost text-danger ms-auto d-none" id="mail-disconnect"><i class="bi bi-x-circle"></i> Disconnect</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header"><div class="section-title"><i class="bi bi-key"></i> How to get an App Password</div></div>
+      <div class="card-body small">
+        <ol class="ps-3 mb-3 d-flex flex-column gap-2">
+          <li>Turn on <strong>2-Step Verification</strong> for your Google account if it isn't already
+            (<a href="https://myaccount.google.com/signinoptions/two-step-verification" target="_blank" rel="noopener noreferrer">open it</a>).</li>
+          <li>Open <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">App passwords</a>,
+            type a name such as <em>Lead Finder</em> and click <strong>Create</strong>.</li>
+          <li>Copy the 16-letter password Google shows and paste it here. Spaces don't matter.</li>
+        </ol>
+        <div class="text-body-secondary">
+          The address and App Password are stored only on this computer, in <code>instance/mail_settings.json</code>,
+          and are never shown again or uploaded anywhere. Disconnecting deletes them; you can also revoke the
+          App Password in your Google account at any time.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('web.static', filename='js/settings.js') }}"></script>
+{% endblock %}
