@@ -65,7 +65,9 @@ the browser profile (your Google cookies), logs, and your Gmail App Password.
 3. *Recent searches* shows live progress. *Results* opens that search's businesses.
 4. **Leads page** – filter (status, category, has phone/website/email,
    unclaimed, social media, website quality, rating, follow-up due), change
-   status inline, export the current view to CSV.
+   status inline, export the current view to CSV. Search accepts Georgian or
+   Latin spelling (`ezo` finds ეზო, `khinkali`/`xinkali` find ხინკალი) and
+   phone numbers with or without spaces or +995.
 5. **Lead page** – call, message, write notes, set a follow-up date, log each
    call (logging a call sets the lead status to its outcome).
 6. **Visits** – plan trips to visit businesses in person (see below).

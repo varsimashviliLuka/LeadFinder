@@ -3,7 +3,7 @@ import io
 import re
 from datetime import date
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select, true
 from sqlalchemy.orm import selectinload
 
 from app.extensions import db
@@ -21,6 +21,7 @@ from app.models import (
 )
 from app.models.common import utcnow
 from app.services import nfc
+from app.services.search import MIN_PHONE_DIGITS, digits, query_key
 from app.services.website_info import website_issues
 
 SCRAPED_FIELDS = (
@@ -180,6 +181,27 @@ def delete_call(business, call):
     business.calls.remove(call)
 
 
+TEXT_SEARCH_FIELDS = (Business.name, Business.address, Business.category, Business.email)
+
+
+def text_search_condition(q):
+    """Every word of q must appear in the name, address, category or email (in any
+    alphabet/spelling, see services/search.py). A number also matches phones
+    regardless of spaces, dashes or the +995 prefix."""
+    word_conditions = []
+    for word in q.split():
+        key = query_key(word)
+        if key:
+            word_conditions.append(or_(*(func.search_key(f).contains(key) for f in TEXT_SEARCH_FIELDS)))
+    condition = and_(*word_conditions) if word_conditions else None
+
+    number = digits(q)
+    if len(number) >= MIN_PHONE_DIGITS and not re.search(r"[^\d\s+()./-]", q):
+        phone = or_(func.digits(Business.phone).contains(number), func.digits(Business.whatsapp).contains(number))
+        condition = phone if condition is None else or_(phone, condition)
+    return condition if condition is not None else true()
+
+
 def build_business_query(
     q=None,
     status=None,
@@ -200,21 +222,13 @@ def build_business_query(
 ):
     stmt = select(Business).options(selectinload(Business.social_profiles))
 
-    if q:
-        pattern = f"%{q.strip()}%"
-        stmt = stmt.where(
-            or_(
-                Business.name.ilike(pattern),
-                Business.address.ilike(pattern),
-                Business.category.ilike(pattern),
-                Business.phone.ilike(pattern),
-            )
-        )
+    if q and q.strip():
+        stmt = stmt.where(text_search_condition(q))
     if status:
         statuses = [s.strip() for s in status.split(",") if s.strip()]
         stmt = stmt.where(Business.lead_status.in_(statuses))
-    if category:
-        stmt = stmt.where(Business.category.ilike(f"%{category.strip()}%"))
+    if category and query_key(category):
+        stmt = stmt.where(func.search_key(Business.category).contains(query_key(category)))
     if has_phone is not None:
         stmt = stmt.where(Business.phone.isnot(None) if has_phone else Business.phone.is_(None))
     if has_website is not None:

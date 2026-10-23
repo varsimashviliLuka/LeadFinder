@@ -69,8 +69,14 @@ def _configure_logging(app):
 
 
 def _configure_sqlite(app):
+    from app.services.search import register_sqlite_functions
+
     uri = app.config["SQLALCHEMY_DATABASE_URI"]
-    if not uri.startswith("sqlite") or ":memory:" in uri:
+    if not uri.startswith("sqlite"):
+        return
+    with app.app_context():
+        event.listen(db.engine, "connect", register_sqlite_functions)
+    if ":memory:" in uri:
         return
 
     with app.app_context():
