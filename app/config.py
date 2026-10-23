@@ -59,6 +59,18 @@ class Config:
     MAIL_SMTP_PORT = int(os.getenv("MAIL_SMTP_PORT", "465"))
     MAIL_SMTP_TIMEOUT = 20
 
+    # Trip routes: "osrm" asks the public OpenStreetMap routing servers; "straight" estimates from distance.
+    ROUTING_PROVIDER = os.getenv("ROUTING_PROVIDER", "osrm")
+    ROUTING_URL = os.getenv("ROUTING_URL", "https://routing.openstreetmap.de")
+    ROUTING_TIMEOUT = float(os.getenv("ROUTING_TIMEOUT", "20"))
+    TRIP_MAX_STOPS = 25
+
+    # Needed to open the app from another device (your phone); see README "Using it on your phone".
+    APP_PASSWORD = os.getenv("APP_PASSWORD") or None
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_HTTPONLY = True
+    PERMANENT_SESSION_LIFETIME = 30 * 24 * 3600
+
     JOB_RUNNER_WORKERS = int(os.getenv("JOB_RUNNER_WORKERS", "1"))
     JOB_RUNNER_SYNC = False
     JOB_RUNNER_RECOVER = True
@@ -78,6 +90,8 @@ class TestingConfig(Config):
     SCRAPER_PROVIDER = "fake"
     FAKE_SCRAPER_DELAY = 0
     SOCIAL_PAGE_DELAY = (0, 0)
+    ROUTING_PROVIDER = "straight"
+    APP_PASSWORD = None
     JOB_RUNNER_SYNC = True
     JOB_RUNNER_RECOVER = False
 

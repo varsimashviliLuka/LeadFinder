@@ -7,6 +7,7 @@ from app.api.health import ns as health_ns
 from app.api.mail import ns as mail_ns
 from app.api.searches import ns as searches_ns
 from app.api.templates import ns as templates_ns
+from app.api.trips import ns as trips_ns
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -24,3 +25,4 @@ api.add_namespace(searches_ns)
 api.add_namespace(geocoding_ns)
 api.add_namespace(templates_ns)
 api.add_namespace(mail_ns)
+api.add_namespace(trips_ns)

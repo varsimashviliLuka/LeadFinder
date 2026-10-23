@@ -7,8 +7,20 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.extensions import db
-from app.models import Business, CallLog, LeadStatus, SearchJob, SocialPlatform, SocialProfile
+from app.models import (
+    Business,
+    CallLog,
+    ContactKind,
+    LeadStatus,
+    SearchJob,
+    ServiceStatus,
+    SocialPlatform,
+    SocialProfile,
+    StopStatus,
+    TripStop,
+)
 from app.models.common import utcnow
+from app.services import nfc
 from app.services.website_info import website_issues
 
 SCRAPED_FIELDS = (
@@ -88,11 +100,14 @@ def upsert_business(data, search_job=None):
 
 def update_business(business, payload):
     """Apply user edits from the dashboard. Raises ValueError on bad input."""
-    unknown = set(payload) - set(EDITABLE_FIELDS)
+    unknown = set(payload) - set(EDITABLE_FIELDS) - set(SERVICE_FIELDS)
     if unknown:
         raise ValueError(f"Fields not editable: {', '.join(sorted(unknown))}")
 
+    set_services(business, payload)
     for key, value in payload.items():
+        if key in SERVICE_FIELDS:
+            continue
         if key == "lead_status":
             if value not in LeadStatus.ALL:
                 raise ValueError(f"lead_status must be one of: {', '.join(LeadStatus.ALL)}")
@@ -117,13 +132,29 @@ def update_business(business, payload):
     return business
 
 
-def log_call(business, outcome, note=None):
-    """Record a call and move the lead to the outcome status. Caller commits."""
+SERVICE_FIELDS = ("service_content", "service_nfc")
+
+
+def set_services(business, payload):
+    """Apply service_content / service_nfc from payload if present (null = not offered). Raises ValueError."""
+    for field in SERVICE_FIELDS:
+        if field not in payload:
+            continue
+        value = payload[field] or None
+        if value is not None and value not in ServiceStatus.ALL:
+            raise ValueError(f"{field} must be one of: {', '.join(ServiceStatus.ALL)}, or null")
+        setattr(business, field, value)
+
+
+def log_call(business, outcome, note=None, kind=ContactKind.CALL):
+    """Record a call or visit and move the lead to the outcome status. Caller commits."""
     if outcome not in LeadStatus.CALL_OUTCOMES:
         raise ValueError(f"outcome must be one of: {', '.join(LeadStatus.CALL_OUTCOMES)}")
+    if kind not in ContactKind.ALL:
+        raise ValueError(f"kind must be one of: {', '.join(ContactKind.ALL)}")
 
     now = utcnow()
-    call = CallLog(business=business, outcome=outcome, note=(note or "").strip() or None, created_at=now)
+    call = CallLog(business=business, kind=kind, outcome=outcome, note=(note or "").strip() or None, created_at=now)
     business.lead_status = outcome
     business.last_contacted_at = now
     db.session.add(call)
@@ -142,6 +173,10 @@ def delete_call(business, call):
     if was_latest and business.lead_status == call.outcome:
         business.lead_status = remaining[0].outcome if remaining else LeadStatus.NEW
     business.last_contacted_at = remaining[0].created_at if remaining else None
+    for stop in db.session.scalars(db.select(TripStop).where(TripStop.call_id == call.id)):
+        stop.call = None
+        stop.status = StopStatus.PENDING
+        stop.visited_at = None
     business.calls.remove(call)
 
 
@@ -158,6 +193,8 @@ def build_business_query(
     search_job_id=None,
     follow_up_due=None,
     social=None,
+    nfc_prospect=None,
+    service=None,
     sort="created_at",
     order="desc",
 ):
@@ -206,10 +243,29 @@ def build_business_query(
         stmt = stmt.where(NEEDS_ONLINE_CHECK)
     elif social in SocialPlatform.ALL:
         stmt = stmt.where(Business.social_profiles.any(SocialProfile.platform == social))
+    if nfc_prospect is not None:
+        stmt = stmt.where(nfc.prospect_condition() if nfc_prospect else nfc.not_prospect_condition())
+    if service:
+        field, value = parse_service_filter(service)
+        column = getattr(Business, field)
+        stmt = stmt.where(column.is_(None) if value == "none" else column == value)
 
     column = SORTABLE_FIELDS.get(sort, Business.created_at)
     ordering = column.asc() if order == "asc" else column.desc()
     return stmt.order_by(ordering.nulls_last(), Business.id.desc())
+
+
+SERVICE_FILTERS = tuple(
+    f"{name}:{value}" for name in ("content", "nfc") for value in (*ServiceStatus.ALL, "none")
+)
+
+
+def parse_service_filter(value):
+    """'nfc:sold' -> ('service_nfc', 'sold'); 'content:none' -> ('service_content', 'none')."""
+    if value not in SERVICE_FILTERS:
+        raise ValueError(f"service must be one of: {', '.join(SERVICE_FILTERS)}")
+    name, status = value.split(":")
+    return f"service_{name}", status
 
 
 CSV_COLUMNS = (
@@ -229,6 +285,9 @@ CSV_COLUMNS = (
     "price_level",
     "claimed",
     "lead_status",
+    "service_content",
+    "service_nfc",
+    "nfc_review_link",
     "follow_up_date",
     "last_contacted_at",
     "notes",
@@ -266,6 +325,8 @@ def businesses_to_csv(businesses):
                 value = " ".join(p.url for p in business.social_profiles if p.platform == column) or None
             elif column == "website_issues":
                 value = "; ".join(website_issues(business.website_check)) or None
+            elif column == "nfc_review_link":
+                value = nfc.review_url(business)
             elif column == "recent_owner_replies" and business.recent_reviews_checked:
                 value = f"{business.recent_owner_replies} of {business.recent_reviews_checked}"
             else:
@@ -302,5 +363,8 @@ def business_stats():
         "needs_check": count_where(NEEDS_ONLINE_CHECK),
         "with_email": count_where(Business.email.isnot(None)),
         "website_problems": count_where(Business.website_issue_count > 0),
+        "nfc_prospects": count_where(nfc.prospect_condition()),
+        "nfc_sold": count_where(Business.service_nfc == ServiceStatus.SOLD),
+        "content_sold": count_where(Business.service_content == ServiceStatus.SOLD),
         "follow_ups_due": count_where(Business.follow_up_date <= date.today()),
     }

@@ -1,0 +1,14 @@
+{% extends "auth_base.html" %}
+
+{% block title %}Sign in · Lead Finder{% endblock %}
+
+{% block content %}
+<h1 class="h5 mb-1">Sign in</h1>
+<p class="small text-body-secondary mb-3">Enter the <code>APP_PASSWORD</code> from your <code>.env</code> file. You stay signed in on this device for 30 days.</p>
+<form method="post">
+  <input type="password" name="password" class="form-control mb-2 {{ 'is-invalid' if error }}" placeholder="Password"
+    autocomplete="current-password" autofocus required>
+  {% if error %}<div class="small text-danger mb-2">{{ error }}</div>{% endif %}
+  <button class="btn btn-primary w-100 mt-1" type="submit"><i class="bi bi-box-arrow-in-right"></i> Sign in</button>
+</form>
+{% endblock %}

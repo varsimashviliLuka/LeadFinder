@@ -40,7 +40,10 @@ def create_app(config_name=None):
     from app.web import web_bp
     from app.workers import job_runner
 
+    from app.web.access import check_access
+
     job_runner.init_app(app)
+    app.before_request(check_access)
     app.register_blueprint(api_bp)
     app.register_blueprint(web_bp)
 

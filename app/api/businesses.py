@@ -5,10 +5,20 @@ from flask_restx import Namespace, Resource, fields, inputs
 
 from app.api.common import json_body, page_model, paginate, pagination_parser
 from app.extensions import db
-from app.models import Business, CallLog, LeadStatus, SocialPlatform, SocialProfile, SocialSource
-from app.services import mailer, socials
+from app.models import (
+    Business,
+    CallLog,
+    ContactKind,
+    LeadStatus,
+    ServiceStatus,
+    SocialPlatform,
+    SocialProfile,
+    SocialSource,
+)
+from app.services import mailer, nfc, socials
 from app.services.website_info import website_issues
 from app.services.businesses import (
+    SERVICE_FILTERS,
     SOCIAL_FILTERS,
     SORTABLE_FIELDS,
     build_business_query,
@@ -56,6 +66,15 @@ business_model = ns.model(
         "recent_reviews_checked": fields.Integer(description="Newest reviews read"),
         "recent_owner_replies": fields.Integer(description="How many of those the owner replied to"),
         "whatsapp": fields.String,
+        "service_content": fields.String(enum=list(ServiceStatus.ALL), description="Content creation; null = not offered"),
+        "service_nfc": fields.String(enum=list(ServiceStatus.ALL), description="Google review NFC card; null = not offered"),
+        "nfc_reasons": fields.List(
+            fields.String, attribute=lambda b: nfc.prospect_reasons(b),
+            description="Why a review NFC card would help; empty = not a prospect",
+        ),
+        "review_url": fields.String(
+            attribute=lambda b: nfc.review_url(b), description="Google 'write a review' link to put on the NFC card"
+        ),
         "social_profiles": fields.List(fields.Nested(social_profile_model)),
         "social_checked_at": fields.DateTime(description="When website & social media were last checked; null if never"),
         "website_check": fields.Raw(description="https, mobile_friendly, load_seconds, copyright_year, builder, error"),
@@ -75,6 +94,7 @@ call_model = ns.model(
     "CallLog",
     {
         "id": fields.Integer(readonly=True),
+        "kind": fields.String(enum=list(ContactKind.ALL)),
         "outcome": fields.String(enum=list(LeadStatus.CALL_OUTCOMES)),
         "note": fields.String,
         "created_at": fields.DateTime(readonly=True),
@@ -123,6 +143,8 @@ business_update_model = ns.model(
         "phone": fields.String,
         "website": fields.String,
         "whatsapp": fields.String,
+        "service_content": fields.String(enum=list(ServiceStatus.ALL), description="null = not offered"),
+        "service_nfc": fields.String(enum=list(ServiceStatus.ALL), description="null = not offered"),
     },
 )
 
@@ -131,6 +153,7 @@ call_create_model = ns.model(
     {
         "outcome": fields.String(required=True, enum=list(LeadStatus.CALL_OUTCOMES)),
         "note": fields.String,
+        "kind": fields.String(enum=list(ContactKind.ALL), default=ContactKind.CALL, description="Phone call or visit"),
     },
 )
 
@@ -147,6 +170,9 @@ stats_model = ns.model(
         "needs_check": fields.Integer(description="Never looked up, or website quality never checked"),
         "with_email": fields.Integer,
         "website_problems": fields.Integer(description="Websites with at least one issue"),
+        "nfc_prospects": fields.Integer(description="Few reviews, low rating or no recent reviews"),
+        "nfc_sold": fields.Integer,
+        "content_sold": fields.Integer,
         "follow_ups_due": fields.Integer,
     },
 )
@@ -185,12 +211,33 @@ list_parser.add_argument(
     location="args",
     help="any / none (checked, nothing found) / unchecked / needs_check / facebook / instagram / tiktok",
 )
+list_parser.add_argument(
+    "nfc_prospect", type=inputs.boolean, location="args", help="true = few reviews, low rating or no recent reviews"
+)
+list_parser.add_argument(
+    "service", choices=list(SERVICE_FILTERS), location="args", help="e.g. nfc:sold, content:interested, nfc:none"
+)
 list_parser.add_argument("sort", choices=list(SORTABLE_FIELDS), default="created_at", location="args")
 list_parser.add_argument("order", choices=["asc", "desc"], default="desc", location="args")
 
 export_parser = list_parser.copy()
 export_parser.remove_argument("page")
 export_parser.remove_argument("per_page")
+
+map_point_model = ns.model(
+    "BusinessMapPoint",
+    {
+        "id": fields.Integer,
+        "name": fields.String,
+        "category": fields.String,
+        "latitude": fields.Float,
+        "longitude": fields.Float,
+        "lead_status": fields.String,
+        "rating": fields.Float,
+        "review_count": fields.Integer,
+        "nfc_prospect": fields.Boolean(attribute=lambda b: bool(nfc.prospect_reasons(b))),
+    },
+)
 
 
 def get_business_or_404(business_id):
@@ -226,6 +273,37 @@ class BusinessExport(Resource):
         )
 
 
+@ns.route("/map")
+class BusinessMap(Resource):
+    @ns.expect(export_parser)
+    @ns.marshal_list_with(map_point_model)
+    def get(self):
+        """Every matching business that has a location, with just what a map needs."""
+        args = export_parser.parse_args()
+        stmt = build_business_query(**args).where(Business.latitude.isnot(None), Business.longitude.isnot(None))
+        return db.session.scalars(stmt).all()
+
+
+@ns.route("/<int:business_id>/review-qr.<string:kind>")
+@ns.response(404, "Business not found, or no Google review link for it")
+class BusinessReviewQr(Resource):
+    @ns.produces(["image/svg+xml", "image/png"])
+    def get(self, business_id, kind):
+        """QR code of the business's Google 'write a review' link (svg or png)."""
+        if kind not in ("svg", "png"):
+            ns.abort(404, "Use review-qr.svg or review-qr.png")
+        business = get_business_or_404(business_id)
+        url = nfc.review_url(business)
+        if not url:
+            ns.abort(404, "No Google review link for this business")
+        mimetype = "image/svg+xml" if kind == "svg" else "image/png"
+        headers = {}
+        if kind == "png":
+            safe = "".join(c if c.isalnum() else "-" for c in business.name)[:60].strip("-") or "business"
+            headers["Content-Disposition"] = f'attachment; filename="review-qr-{safe}.png"'
+        return Response(nfc.qr_code(url, kind), mimetype=mimetype, headers=headers)
+
+
 @ns.route("/stats")
 class BusinessStats(Resource):
     @ns.marshal_with(stats_model)
@@ -244,7 +322,7 @@ class BusinessItem(Resource):
     @ns.response(400, "Validation error")
     @ns.marshal_with(business_detail_model)
     def patch(self, business_id):
-        """Update lead fields: lead_status, notes, follow_up_date, email, phone, website."""
+        """Update lead fields: lead_status, notes, follow_up_date, contacts, website, service_content, service_nfc."""
         business = get_business_or_404(business_id)
         try:
             update_business(business, json_body(ns))
@@ -272,14 +350,14 @@ class BusinessCalls(Resource):
     @ns.response(400, "Validation error")
     @ns.marshal_with(call_model, code=201)
     def post(self, business_id):
-        """Log a call; the business's lead_status becomes the call outcome."""
+        """Log a call or visit; the business's lead_status becomes the outcome."""
         business = get_business_or_404(business_id)
         payload = json_body(ns)
         note = payload.get("note")
         if note is not None and not isinstance(note, str):
             ns.abort(400, "note must be a string")
         try:
-            call = log_call(business, payload.get("outcome"), note)
+            call = log_call(business, payload.get("outcome"), note, kind=payload.get("kind") or ContactKind.CALL)
         except ValueError as exc:
             ns.abort(400, str(exc))
         db.session.commit()

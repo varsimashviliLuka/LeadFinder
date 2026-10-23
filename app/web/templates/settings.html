@@ -5,7 +5,7 @@
 {% block page_header %}
 <div class="page-header">
   <h1>Settings</h1>
-  <p>Connect your Gmail so the <em>Email</em> button on a lead sends the message straight from this app.</p>
+  <p>Connect your Gmail so the <em>Email</em> button on a lead sends the message straight from this app, and set up your phone for visits.</p>
 </div>
 {% endblock %}
 
@@ -60,6 +60,58 @@
           The address and App Password are stored only on this computer, in <code>instance/mail_settings.json</code>,
           and are never shown again or uploaded anywhere. Disconnecting deletes them; you can also revoke the
           App Password in your Google account at any time.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card" id="phone-access">
+      <div class="card-header d-flex justify-content-between align-items-center gap-2">
+        <div>
+          <div class="section-title"><i class="bi bi-phone"></i> Use on your phone</div>
+          <p class="section-hint">Open your visit route on your phone to log each visit while you walk or drive. This computer must stay on and connected.</p>
+        </div>
+        {% if phone.ready and phone.listening %}
+        <span class="pill pill-success"><i class="bi bi-check-circle"></i>Ready</span>
+        {% else %}
+        <span class="pill pill-secondary"><i class="bi bi-slash-circle"></i>Off</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="row g-4 align-items-start">
+          <div class="col-md-8 small">
+            <ol class="ps-3 mb-3 d-flex flex-column gap-2">
+              <li class="{{ 'text-body-secondary' if phone.ready }}">
+                {% if phone.ready %}<i class="bi bi-check-lg text-success"></i>{% endif %}
+                In the <code>.env</code> file, set <code>APP_PASSWORD</code> to a password for your phone and
+                <code>SECRET_KEY</code> to a long random text (not <code>change-me</code>).
+              </li>
+              <li class="{{ 'text-body-secondary' if phone.listening }}">
+                {% if phone.listening %}<i class="bi bi-check-lg text-success"></i>{% endif %}
+                Start the app so other devices can reach it:
+                <code>flask run --host 0.0.0.0 --port {{ phone.port }}</code>
+              </li>
+              <li>Connect the computer and phone to the same network. Out in the city, turn on your
+                <strong>phone's hotspot</strong> and connect the laptop to it. If the laptop stays at home, install
+                <a href="https://tailscale.com/download" target="_blank" rel="noopener noreferrer">Tailscale</a> on both and use the
+                computer's Tailscale address instead.</li>
+              <li>On the phone, scan the QR code or open
+                {% if phone.url %}<code>{{ phone.url }}</code>{% else %}<em>http://&lt;this computer's IP&gt;:{{ phone.port }}</em>{% endif %}
+                and sign in with the password.</li>
+            </ol>
+            <div class="text-body-secondary">The address changes when you switch networks, so check it here again.
+              Pages on this computer never ask for the password.</div>
+          </div>
+          <div class="col-md-4 text-center">
+            {% if phone.qr and phone.ready and phone.listening %}
+            <div class="qr-box">{{ phone.qr|safe }}</div>
+            <div class="small text-body-secondary mt-2">{{ phone.url }}</div>
+            {% else %}
+            <div class="empty-state py-4"><i class="bi bi-qr-code"></i>
+              <div class="small">A QR code for your phone appears here after steps 1 and 2.</div></div>
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>

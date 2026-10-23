@@ -72,6 +72,14 @@
         <div id="b-website-check"></div>
       </div>
 
+      <div class="card">
+        <div class="card-header">
+          <div class="section-title"><i class="bi bi-credit-card-2-front"></i> Google review NFC card</div>
+          <p class="section-hint">A card customers tap with their phone to open this business's "write a review" page on Google.</p>
+        </div>
+        <div class="card-body" id="b-nfc"></div>
+      </div>
+
       <div class="row g-4">
         <div class="col-md-6">
           <div class="card h-100">
@@ -101,15 +109,23 @@
 
     <div class="col-lg-5 d-flex flex-column gap-4">
       <form id="call-form" class="card">
-        <div class="card-header">
-          <div class="section-title"><i class="bi bi-telephone-plus"></i> Log a call</div>
-          <p class="section-hint">After calling, pick what happened. The lead's status updates automatically.</p>
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-start gap-2">
+          <div>
+            <div class="section-title"><i class="bi bi-telephone-plus"></i> Log a call or visit</div>
+            <p class="section-hint">After calling or visiting, pick what happened. The lead's status updates automatically.</p>
+          </div>
+          <div class="btn-group btn-group-sm" role="group" aria-label="Call or visit">
+            <input type="radio" class="btn-check" name="contact-kind" id="kind-call" value="call" checked>
+            <label class="btn btn-outline-secondary" for="kind-call"><i class="bi bi-telephone"></i> Call</label>
+            <input type="radio" class="btn-check" name="contact-kind" id="kind-visit" value="visit">
+            <label class="btn btn-outline-secondary" for="kind-visit"><i class="bi bi-shop"></i> Visit</label>
+          </div>
         </div>
         <div class="card-body">
           <div class="d-flex flex-column gap-2 mb-3" id="call-outcomes"></div>
           <textarea id="call-note" class="form-control mb-3" rows="2" placeholder="Optional note, e.g. spoke to Nino, send prices by Friday"></textarea>
           <button type="submit" class="btn btn-primary w-100" id="call-submit" disabled>
-            <i class="bi bi-check2-circle"></i> Save this call
+            <i class="bi bi-check2-circle"></i> <span id="call-submit-label">Save this call</span>
           </button>
         </div>
       </form>
@@ -118,11 +134,28 @@
         <div class="card-header d-flex justify-content-between align-items-center">
           <div>
             <div class="section-title"><i class="bi bi-list-check"></i> History</div>
-            <p class="section-hint">Calls and emails, newest first. Logged a call by mistake? Delete it to undo.</p>
+            <p class="section-hint">Calls, visits and emails, newest first. Logged one by mistake? Delete it to undo.</p>
           </div>
           <span class="badge text-bg-secondary" id="call-count"></span>
         </div>
         <div id="call-history"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="section-title"><i class="bi bi-briefcase"></i> Services</div>
+          <p class="section-hint">What you offered this business and how they answered. Saved as soon as you change it.</p>
+        </div>
+        <div class="card-body row g-3">
+          <div class="col-6">
+            <label class="form-label small mb-1" for="service-content"><i class="bi bi-camera-reels"></i> Content creation</label>
+            <select id="service-content" class="form-select" data-service="service_content"></select>
+          </div>
+          <div class="col-6">
+            <label class="form-label small mb-1" for="service-nfc"><i class="bi bi-credit-card-2-front"></i> Review NFC card</label>
+            <select id="service-nfc" class="form-select" data-service="service_nfc"></select>
+          </div>
+        </div>
       </div>
 
       <form id="lead-form" class="card">

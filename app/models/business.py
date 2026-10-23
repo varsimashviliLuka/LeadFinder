@@ -14,6 +14,17 @@ class LeadStatus:
     CALL_OUTCOMES = (NO_ANSWER, CALL_BACK, INTERESTED, NOT_INTERESTED, CLIENT)
 
 
+class ServiceStatus:
+    """Where a lead stands for one service you sell. None means not offered yet."""
+
+    OFFERED = "offered"
+    INTERESTED = "interested"
+    SOLD = "sold"
+    DECLINED = "declined"
+
+    ALL = (OFFERED, INTERESTED, SOLD, DECLINED)
+
+
 search_job_results = db.Table(
     "search_job_results",
     db.Column("search_job_id", db.Integer, db.ForeignKey("search_jobs.id", ondelete="CASCADE"), primary_key=True),
@@ -58,6 +69,8 @@ class Business(db.Model):
     notes = db.Column(db.Text)
     follow_up_date = db.Column(db.Date, index=True)
     last_contacted_at = db.Column(db.DateTime(timezone=True))
+    service_content = db.Column(db.String(16), index=True)  # content creation, a ServiceStatus
+    service_nfc = db.Column(db.String(16), index=True)  # Google review NFC card, a ServiceStatus
 
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
@@ -81,6 +94,7 @@ class Business(db.Model):
         order_by="SocialProfile.platform, SocialProfile.id",
     )
     search_jobs = db.relationship("SearchJob", secondary=search_job_results, back_populates="businesses")
+    trip_stops = db.relationship("TripStop", back_populates="business", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Business {self.id} {self.name!r}>"

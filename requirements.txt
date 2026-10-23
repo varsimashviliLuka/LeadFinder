@@ -8,3 +8,4 @@ python-dotenv==1.2.4
 httpx==0.28.1
 playwright==1.64.0
 phonenumbers==9.0.41
+segno==1.6.6

@@ -301,12 +301,12 @@ function renderMap(b) {
 function renderCalls(b) {
   const box = document.getElementById("call-history");
   const emails = b.emails || [];
-  const items = [...b.calls.map((c) => ({ ...c, kind: "call" })), ...emails.map((m) => ({ ...m, kind: "email" }))]
+  const items = [...b.calls.map((c) => ({ ...c, type: "call" })), ...emails.map((m) => ({ ...m, type: "email" }))]
     .sort((x, y) => parseUtc(y.created_at) - parseUtc(x.created_at));
   document.getElementById("call-count").textContent = items.length || "";
   box.innerHTML = items.length
     ? items
-        .map((c) => c.kind === "email" ? `<div class="timeline-item">
+        .map((c) => c.type === "email" ? `<div class="timeline-item">
           <span class="timeline-dot"></span>
           <span class="pill pill-primary"><i class="bi bi-envelope-check"></i>Email sent</span>
           <div class="small text-body-secondary mt-1">${esc(fmtDateTime(c.created_at))} · to ${esc(c.to_address)}</div>
@@ -317,9 +317,11 @@ function renderCalls(b) {
           <div class="d-flex justify-content-between align-items-start gap-2">
             <div>
               ${statusPill(c.outcome)}
-              <div class="small text-body-secondary mt-1">${esc(fmtDateTime(c.created_at))}</div>
+              <div class="small text-body-secondary mt-1">
+                <i class="bi ${c.kind === "visit" ? "bi-shop" : "bi-telephone"}"></i> ${c.kind === "visit" ? "Visit" : "Call"} · ${esc(fmtDateTime(c.created_at))}
+              </div>
             </div>
-            <button type="button" class="btn btn-sm btn-ghost text-danger delete-call" data-call-id="${c.id}" title="Delete this call">
+            <button type="button" class="btn btn-sm btn-ghost text-danger delete-call" data-call-id="${c.id}" title="Delete this ${c.kind === "visit" ? "visit" : "call"}">
               <i class="bi bi-trash"></i>
             </button>
           </div>
@@ -330,6 +332,79 @@ function renderCalls(b) {
         <div class="small">Nothing yet. After you call, record it above. Emails you send appear here too.</div></div>`;
   box.querySelectorAll("[data-call-id]").forEach((btn) => btn.addEventListener("click", () => deleteCall(btn.dataset.callId)));
 }
+
+function renderNfc(b) {
+  const box = document.getElementById("b-nfc");
+  const reasons = b.nfc_reasons.length
+    ? `<div class="small fw-semibold mb-1"><i class="bi bi-lightbulb text-warning"></i> Why they'd want one</div>
+       <ul class="small mb-3 ps-3">${b.nfc_reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`
+    : `<div class="small text-body-secondary mb-3"><i class="bi bi-check-circle text-success"></i>
+        They already get plenty of reviews (${b.review_count ?? 0}, rated ${b.rating ?? "n/a"}). A card is a harder sell here.</div>`;
+  if (!b.review_url) {
+    box.innerHTML = `${reasons}<div class="small text-body-secondary">This listing has no Google place id, so its review link isn't known.
+      Search for the business again to refresh it.</div>`;
+    return;
+  }
+  const qr = `/api/businesses/${b.id}/review-qr`;
+  box.innerHTML = `${reasons}
+    <div class="row g-3 align-items-start">
+      <div class="col-sm-8">
+        <label class="form-label small mb-1" for="review-link">Link to write onto the card</label>
+        <div class="input-group input-group-sm mb-2">
+          <input id="review-link" class="form-control font-monospace" value="${esc(b.review_url)}" readonly>
+          <button class="btn btn-outline-secondary" type="button" id="copy-review-link"><i class="bi bi-clipboard"></i> Copy</button>
+        </div>
+        <a class="btn btn-sm btn-ghost mb-2" href="${esc(b.review_url)}" target="_blank" rel="noopener noreferrer">
+          <i class="bi bi-box-arrow-up-right"></i> Test the link</a>
+        <details class="small">
+          <summary class="fw-semibold">How to write it onto an NFC card</summary>
+          <ol class="ps-3 mt-2 mb-0 d-flex flex-column gap-1">
+            <li>Install <strong>NFC Tools</strong> on your phone (free, Android and iPhone).</li>
+            <li>Open it, go to <em>Write</em> → <em>Add a record</em> → <em>URL / URI</em>, and paste the link.</li>
+            <li>Tap <em>Write</em> and hold a blank NTAG213/215 card to the back of the phone.</li>
+            <li>Test: tap the card with another phone. Google's review box for this business should open.</li>
+            <li>Optional: in NFC Tools' <em>Other</em> tab, <em>Lock tag</em> so nobody can overwrite it (can't be undone).</li>
+          </ol>
+        </details>
+      </div>
+      <div class="col-sm-4 text-center">
+        <div class="qr-box"><img src="${qr}.svg" alt="QR code for the review link" width="140" height="140"></div>
+        <div class="mt-2"><a class="small" href="${qr}.png" download="review-qr-${b.id}.png"><i class="bi bi-download"></i> QR for printing</a></div>
+      </div>
+    </div>`;
+  document.getElementById("copy-review-link").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(b.review_url);
+      toast("Review link copied");
+    } catch {
+      document.getElementById("review-link").select();
+      toast("Press Ctrl+C to copy", "info");
+    }
+  });
+}
+
+function renderServices(b) {
+  for (const select of document.querySelectorAll("[data-service]")) {
+    const value = b[select.dataset.service];
+    select.innerHTML = `<option value="">Not offered yet</option>${window.APP.serviceStatuses
+      .map((s) => `<option value="${s.value}" ${s.value === value ? "selected" : ""}>${esc(s.label)}: ${esc(s.help.toLowerCase())}</option>`)
+      .join("")}`;
+  }
+}
+
+document.querySelectorAll("[data-service]").forEach((select) =>
+  select.addEventListener("change", async () => {
+    select.disabled = true;
+    try {
+      const updated = await api(`/businesses/${businessId}`, { method: "PATCH", body: { [select.dataset.service]: select.value || null } });
+      render(updated, { keepForm: dirty });
+      toast("Saved");
+    } catch (err) {
+      toast(err.message, "danger");
+    }
+    select.disabled = false;
+  }),
+);
 
 function renderLeadForm(b) {
   document.getElementById("lead-status").innerHTML = statusOptions(b.lead_status);
@@ -353,6 +428,8 @@ function render(b, { keepForm = false } = {}) {
   renderHours(b);
   renderMap(b);
   renderCalls(b);
+  renderNfc(b);
+  renderServices(b);
   if (!keepForm) renderLeadForm(b);
   else document.getElementById("lead-status").value = b.lead_status;
   initTooltips(document.getElementById("detail"));
@@ -381,6 +458,12 @@ document.getElementById("call-outcomes").innerHTML = window.APP.callOutcomes
   })
   .join("");
 
+document.querySelectorAll('input[name="contact-kind"]').forEach((input) =>
+  input.addEventListener("change", () => {
+    document.getElementById("call-submit-label").textContent = input.value === "visit" ? "Save this visit" : "Save this call";
+  }),
+);
+
 document.getElementById("call-outcomes").addEventListener("change", () => {
   document.getElementById("call-submit").disabled = false;
 });
@@ -390,15 +473,16 @@ document.getElementById("call-form").addEventListener("submit", async (e) => {
   const outcome = document.querySelector('input[name="outcome"]:checked')?.value;
   if (!outcome) return;
   const submit = document.getElementById("call-submit");
+  const kind = document.querySelector('input[name="contact-kind"]:checked').value;
   submit.disabled = true;
   try {
     await api(`/businesses/${businessId}/calls`, {
       method: "POST",
-      body: { outcome, note: document.getElementById("call-note").value },
+      body: { kind, outcome, note: document.getElementById("call-note").value },
     });
     document.getElementById("call-note").value = "";
     document.querySelector('input[name="outcome"]:checked').checked = false;
-    toast(`Call saved. Status is now "${STATUS_BY_VALUE[outcome].label}"`);
+    toast(`${kind === "visit" ? "Visit" : "Call"} saved. Status is now "${STATUS_BY_VALUE[outcome].label}"`);
     render(await api(`/businesses/${businessId}`), { keepForm: dirty });
     if (outcome === "call_back" && !document.getElementById("lead-followup").value) {
       toast("Tip: set a follow-up date in Your notes so you don't forget to call back", "info");
@@ -411,11 +495,12 @@ document.getElementById("call-form").addEventListener("submit", async (e) => {
 
 async function deleteCall(callId) {
   const call = business.calls.find((c) => String(c.id) === String(callId));
+  const what = call.kind === "visit" ? "visit" : "call";
   const ok = await confirmDialog({
-    title: "Delete this call?",
-    body: `The "${STATUS_BY_VALUE[call.outcome].label}" call from ${fmtDateTime(call.created_at)} will be removed. `
+    title: `Delete this ${what}?`,
+    body: `The "${STATUS_BY_VALUE[call.outcome].label}" ${what} from ${fmtDateTime(call.created_at)} will be removed. `
       + "If it set the current status, the status goes back to what it was before.",
-    confirmText: "Delete call",
+    confirmText: `Delete ${what}`,
   });
   if (!ok) return;
   try {

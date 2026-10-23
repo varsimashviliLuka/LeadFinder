@@ -1,9 +1,14 @@
 const form = document.getElementById("filters");
 const FILTER_NAMES = [
   "q", "status", "category", "sort", "order", "has_phone", "has_website",
-  "claimed", "social", "website_quality", "has_email", "min_rating", "follow_up_due", "search_job_id",
+  "claimed", "social", "website_quality", "has_email", "min_rating", "nfc_prospect", "service", "follow_up_due", "search_job_id",
 ];
-const MORE_FILTERS = ["category", "has_phone", "has_website", "claimed", "social", "website_quality", "has_email", "min_rating"];
+const MORE_FILTERS = [
+  "category", "has_phone", "has_website", "claimed", "social", "website_quality", "has_email", "min_rating", "nfc_prospect", "service",
+];
+const selected = new Set();
+let pageIds = [];
+let lastTotal = 0;
 // Sensible direction per sort, so beginners don't need an order control.
 const SORT_ORDER = {
   created_at: "desc", name: "asc", rating: "desc", review_count: "desc", follow_up_date: "asc", last_contacted_at: "desc",
@@ -78,9 +83,16 @@ function rowHtml(b) {
     ? ` <span class="pill pill-warning ms-1" data-bs-toggle="tooltip"
           title="Nobody manages this Google listing; a good sign they need help online">Unclaimed</span>`
     : "";
-  return `<tr data-id="${b.id}">
+  const nfc = b.service_nfc === "sold"
+    ? ' <span class="pill pill-success ms-1" data-bs-toggle="tooltip" title="You sold them a review NFC card"><i class="bi bi-credit-card-2-front"></i>NFC</span>'
+    : b.nfc_reasons?.length && !b.service_nfc
+      ? ` <span class="pill pill-info ms-1" data-bs-toggle="tooltip" title="${esc(`Good review NFC card prospect: ${b.nfc_reasons.join(" · ")}`)}"><i class="bi bi-credit-card-2-front"></i>NFC</span>`
+      : "";
+  return `<tr data-id="${b.id}" class="${selected.has(b.id) ? "row-selected" : ""}">
+    <td class="select-col"><input type="checkbox" class="form-check-input" data-select="${b.id}" ${selected.has(b.id) ? "checked" : ""}
+      aria-label="Select ${esc(b.name)}"></td>
     <td>
-      <div class="fw-semibold">${esc(b.name)}${unclaimed}</div>
+      <div class="fw-semibold">${esc(b.name)}${unclaimed}${nfc}</div>
       <div class="small text-body-secondary text-truncate-cell">${esc(b.category || "")}${b.address ? ` · ${esc(b.address)}` : ""}</div>
     </td>
     <td>${phoneChip(b.phone)}</td>
@@ -94,14 +106,14 @@ function rowHtml(b) {
 
 function emptyHtml() {
   if (totalLeads === 0) {
-    return `<tr><td colspan="7"><div class="empty-state">
+    return `<tr><td colspan="8"><div class="empty-state">
       <i class="bi bi-person-lines-fill"></i>
       <div class="fw-semibold text-body">No leads yet</div>
       <div class="small mb-3">Run a search and the businesses it finds will appear here.</div>
       <a href="/" class="btn btn-primary btn-sm"><i class="bi bi-search-heart"></i> Find businesses</a>
     </div></td></tr>`;
   }
-  return `<tr><td colspan="7"><div class="empty-state">
+  return `<tr><td colspan="8"><div class="empty-state">
     <i class="bi bi-funnel"></i>
     <div class="fw-semibold text-body">No leads match these filters</div>
     <button type="button" class="btn btn-link btn-sm" data-reset>Clear all filters</button>
@@ -135,6 +147,9 @@ async function load({ pushUrl = true } = {}) {
     disposeTooltips(body);
     body.innerHTML = data.items.length ? data.items.map(rowHtml).join("") : emptyHtml();
     initTooltips(body);
+    pageIds = data.items.map((b) => b.id);
+    lastTotal = data.total;
+    updateSelection();
     body.querySelector("[data-reset]")?.addEventListener("click", resetFilters);
 
     const first = data.total ? (data.page - 1) * data.per_page + 1 : 0;
@@ -143,7 +158,7 @@ async function load({ pushUrl = true } = {}) {
     document.getElementById("prev-page").disabled = data.page <= 1;
     document.getElementById("next-page").disabled = data.page >= data.pages;
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="7" class="empty-state text-danger">${esc(err.message)}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="empty-state text-danger">${esc(err.message)}</td></tr>`;
   }
 }
 
@@ -238,11 +253,23 @@ document.getElementById("next-page").addEventListener("click", () => {
 
 const tableBody = document.getElementById("businesses-body");
 tableBody.addEventListener("click", (e) => {
-  if (e.target.closest("a, select, button")) return;
+  if (e.target.closest("a, select, button, input, .select-col")) {
+    const cell = e.target.closest(".select-col");
+    if (cell && e.target === cell) cell.querySelector("input").click();
+    return;
+  }
   const row = e.target.closest("tr[data-id]");
   if (row) location.href = `/businesses/${row.dataset.id}`;
 });
 tableBody.addEventListener("change", async (e) => {
+  const box = e.target.closest("[data-select]");
+  if (box) {
+    const id = Number(box.dataset.select);
+    if (box.checked) selected.add(id);
+    else selected.delete(id);
+    updateSelection();
+    return;
+  }
   const select = e.target.closest("[data-status-for]");
   if (!select) return;
   select.disabled = true;
@@ -254,6 +281,79 @@ tableBody.addEventListener("change", async (e) => {
     toast(err.message, "danger");
   }
   select.disabled = false;
+});
+
+// ---------- Select leads to visit ----------
+
+const selectPage = document.getElementById("select-page");
+const tripTarget = document.getElementById("trip-target");
+
+function updateSelection() {
+  tableBody.querySelectorAll("[data-select]").forEach((box) => {
+    box.checked = selected.has(Number(box.dataset.select));
+    box.closest("tr").classList.toggle("row-selected", box.checked);
+  });
+  const onPage = pageIds.filter((id) => selected.has(id)).length;
+  selectPage.checked = pageIds.length > 0 && onPage === pageIds.length;
+  selectPage.indeterminate = onPage > 0 && onPage < pageIds.length;
+  document.getElementById("selected-count").textContent = selected.size;
+  document.getElementById("selection-bar").classList.toggle("d-none", !selected.size);
+  const matching = document.getElementById("select-all-matching");
+  matching.classList.toggle("d-none", !(selectPage.checked && lastTotal > pageIds.length && selected.size < lastTotal));
+  matching.querySelector("[data-page-count]").textContent = pageIds.length;
+  matching.querySelector("[data-total]").textContent = lastTotal.toLocaleString();
+}
+
+selectPage.addEventListener("change", () => {
+  pageIds.forEach((id) => (selectPage.checked ? selected.add(id) : selected.delete(id)));
+  updateSelection();
+});
+
+document.querySelector("[data-select-matching]").addEventListener("click", async () => {
+  try {
+    // Only leads with a location can be visited, which is what the map endpoint returns.
+    const points = await api(`/businesses/map?${currentFilters()}`);
+    points.forEach((p) => selected.add(p.id));
+    updateSelection();
+  } catch (err) {
+    toast(err.message, "danger");
+  }
+});
+
+document.getElementById("clear-selection").addEventListener("click", () => {
+  selected.clear();
+  updateSelection();
+});
+
+async function loadTripOptions() {
+  try {
+    const trips = await api("/trips");
+    tripTarget.innerHTML = '<option value="new">A new trip</option>'
+      + trips.map((t) => `<option value="${t.id}">${esc(t.name)} (${t.stop_count} stops)</option>`).join("");
+  } catch {
+    // "A new trip" still works.
+  }
+}
+
+document.getElementById("add-to-trip").addEventListener("click", async () => {
+  const ids = [...selected];
+  try {
+    const result = tripTarget.value === "new"
+      ? await api("/trips", { method: "POST", body: { business_ids: ids } })
+      : await api(`/trips/${tripTarget.value}/stops`, { method: "POST", body: { business_ids: ids } });
+    if (result.skipped.length) {
+      const reasons = {};
+      result.skipped.forEach((s) => { reasons[s.reason] = (reasons[s.reason] || 0) + 1; });
+      toast(`Skipped ${result.skipped.length}: ${Object.entries(reasons).map(([r, n]) => `${n} ${r}`).join(", ")}`, "info");
+    }
+    if (!result.added && !result.trip.stop_count) {
+      if (tripTarget.value === "new") await api(`/trips/${result.trip.id}`, { method: "DELETE" });
+      return;
+    }
+    window.location.href = `/trips/${result.trip.id}`;
+  } catch (err) {
+    toast(err.message, "danger");
+  }
 });
 
 // ---------- Find social media for leads never checked ----------
@@ -334,4 +434,5 @@ window.addEventListener("beforeunload", (e) => {
 
 readFiltersFromUrl();
 showJobFilter();
+loadTripOptions();
 loadCounts().then(() => load({ pushUrl: false }));

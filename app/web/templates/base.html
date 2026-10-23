@@ -25,6 +25,7 @@
   {% set nav = [
     ("search", url_for("web.dashboard"), "bi-search-heart", "Find businesses", "Search Google Maps near a place"),
     ("leads", url_for("web.businesses"), "bi-person-lines-fill", "Leads", "Call businesses and track progress"),
+    ("trips", url_for("web.trips"), "bi-signpost-split", "Visits", "Plan the fastest route to visit in person"),
     ("templates", url_for("web.templates"), "bi-chat-text", "Messages", "Ready texts for WhatsApp, Viber, email"),
     ("settings", url_for("web.settings"), "bi-gear", "Settings", "Connect Gmail to send emails"),
   ] %}
@@ -58,9 +59,15 @@
             <i class="bi bi-sun theme-icon-dark"></i>
             <span class="theme-label ms-1"></span>
           </button>
+          {% if signed_in_remotely %}
+          <form method="post" action="{{ url_for('web.logout') }}">
+            <button class="btn btn-sm btn-ghost" type="submit"><i class="bi bi-box-arrow-right"></i> Sign out</button>
+          </form>
+          {% else %}
           <a class="btn btn-sm btn-ghost" href="/api/docs" target="_blank" title="Developer API documentation">
             <i class="bi bi-code-slash"></i> API
           </a>
+          {% endif %}
         </div>
       </div>
     </aside>
@@ -70,16 +77,21 @@
         <span class="brand-mark"><i class="bi bi-geo-alt-fill"></i></span>
         <span>Lead Finder</span>
       </a>
-      <nav class="d-flex gap-1">
+      <nav class="topbar-nav">
         {% for key, href, icon, label, hint in nav %}
-        <a class="btn btn-sm {{ 'btn-primary' if active == key else 'btn-ghost' }}" href="{{ href }}">
-          <i class="bi {{ icon }}"></i> {{ label }}
+        <a class="btn btn-sm {{ 'btn-primary' if active == key else 'btn-ghost' }}" href="{{ href }}" title="{{ hint }}">
+          <i class="bi {{ icon }}"></i> <span class="topbar-label">{{ label }}</span>
         </a>
         {% endfor %}
         <button class="btn btn-sm btn-ghost theme-toggle" type="button" aria-label="Switch light/dark theme">
           <i class="bi bi-moon-stars theme-icon-light"></i>
           <i class="bi bi-sun theme-icon-dark"></i>
         </button>
+        {% if signed_in_remotely %}
+        <form method="post" action="{{ url_for('web.logout') }}" class="d-inline">
+          <button class="btn btn-sm btn-ghost" type="submit" title="Sign out on this device"><i class="bi bi-box-arrow-right"></i></button>
+        </form>
+        {% endif %}
       </nav>
     </header>
 

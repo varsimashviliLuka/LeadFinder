@@ -146,6 +146,30 @@
               <option value="">Any</option><option value="3">3 ★ and up</option><option value="4">4 ★ and up</option><option value="4.5">4.5 ★ and up</option>
             </select>
           </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label small mb-1" for="f-nfc">
+              Review NFC card
+              <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                 title="Prospects have under 50 Google reviews, a rating below 4.3, or no new review in 3 months. A tap-to-review card helps them get more."></i>
+            </label>
+            <select id="f-nfc" name="nfc_prospect" class="form-select form-select-sm">
+              <option value="">Any</option><option value="true">Good NFC card prospects</option><option value="false">Already have plenty of reviews</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-3">
+            <label class="form-label small mb-1" for="f-service">Services you offered</label>
+            <select id="f-service" name="service" class="form-select form-select-sm">
+              <option value="">Any</option>
+              {% for key, label in [("nfc", "NFC card"), ("content", "Content creation")] %}
+              <optgroup label="{{ label }}">
+                <option value="{{ key }}:none">{{ label }}: not offered yet</option>
+                {% for s in app_data.serviceStatuses %}
+                <option value="{{ key }}:{{ s.value }}">{{ label }}: {{ s.label }}</option>
+                {% endfor %}
+              </optgroup>
+              {% endfor %}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -160,6 +184,8 @@
     <table class="table leads-table">
       <thead>
         <tr>
+          <th class="select-col"><input type="checkbox" class="form-check-input" id="select-page"
+            aria-label="Select all on this page" data-bs-toggle="tooltip" title="Select all on this page, e.g. to visit them"></th>
           <th>Business</th>
           <th>Phone</th>
           <th>Website &amp; social</th>
@@ -174,9 +200,13 @@
         </tr>
       </thead>
       <tbody id="businesses-body">
-        <tr><td colspan="7" class="empty-state"><span class="spinner-border spinner-border-sm"></span></td></tr>
+        <tr><td colspan="8" class="empty-state"><span class="spinner-border spinner-border-sm"></span></td></tr>
       </tbody>
     </table>
+  </div>
+  <div class="px-3 py-2 small border-top d-none" id="select-all-matching">
+    All <span data-page-count></span> on this page are selected.
+    <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-select-matching>Select all <span data-total></span> matching leads</button>
   </div>
   <div class="card-footer bg-transparent d-flex flex-wrap justify-content-between align-items-center gap-2">
     <span id="page-info" class="small text-body-secondary"></span>
@@ -189,6 +219,18 @@
         <button id="next-page" class="btn btn-outline-secondary">Next <i class="bi bi-chevron-right"></i></button>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="selection-bar d-none" id="selection-bar">
+  <span class="fw-semibold"><i class="bi bi-check2-square"></i> <span id="selected-count">0</span> selected</span>
+  <button type="button" class="btn btn-sm btn-ghost" id="clear-selection">Clear</button>
+  <div class="ms-auto d-flex flex-wrap gap-2 align-items-center">
+    <label class="small text-body-secondary" for="trip-target">Visit in person:</label>
+    <select id="trip-target" class="form-select form-select-sm w-auto">
+      <option value="new">A new trip</option>
+    </select>
+    <button type="button" class="btn btn-sm btn-primary" id="add-to-trip"><i class="bi bi-signpost-split"></i> Add to trip</button>
   </div>
 </div>
 {% endblock %}

@@ -177,6 +177,24 @@ function formatDistance(meters) {
   return meters < 1000 ? `${meters} m` : `${(meters / 1000).toFixed(1).replace(/\.0$/, "")} km`;
 }
 
+const TRAVEL_MODES = {
+  foot: { label: "Walk", icon: "bi-person-walking", verb: "walk", google: "walking" },
+  car: { label: "Car", icon: "bi-car-front", verb: "drive", google: "driving" },
+};
+
+function fmtDuration(seconds) {
+  const minutes = Math.max(1, Math.round((seconds || 0) / 60));
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
+// Local "YYYY-MM-DDTHH:MM" (no zone) → "14:30".
+function fmtClock(localIso) {
+  return localIso ? localIso.slice(11, 16) : "—";
+}
+
 // The API returns UTC timestamps without a zone suffix.
 function parseUtc(iso) {
   if (!iso) return null;
