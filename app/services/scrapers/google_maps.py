@@ -9,6 +9,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
+from app.services import nfc
 from app.services.scrapers.base import BaseScraper
 from app.services.scrapers.human import Human
 from app.services.scrapers.pacing import ScraperBlockedError, ScraperLimitError, ScraperState
@@ -390,10 +391,26 @@ class GoogleMapsScraper(BaseScraper):
                     failed_streak = 0
                     if params.collect_reviews:
                         details["reviews_summary"] = self._read_reviews(page, human)
-                    yield build_business(details, parsed, cfg["SCRAPER_PHONE_REGION"])
-                    yielded += 1
-                    if yielded >= params.max_results:
-                        return
+                    business = build_business(details, parsed, cfg["SCRAPER_PHONE_REGION"])
+                    if not nfc.matches_review_limits(
+                        business.get("rating"),
+                        business.get("review_count"),
+                        params.max_rating,
+                        params.max_reviews,
+                    ):
+                        logger.info(
+                            "Skipping %s: rating=%s reviews=%s (caps %s / %s)",
+                            business.get("name"),
+                            business.get("rating"),
+                            business.get("review_count"),
+                            params.max_rating,
+                            params.max_reviews,
+                        )
+                    else:
+                        yield business
+                        yielded += 1
+                        if yielded >= params.max_results:
+                            return
                 else:
                     failed_streak += 1
                     if failed_streak >= FAILED_PLACE_STREAK_LIMIT:

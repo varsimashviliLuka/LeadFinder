@@ -2,6 +2,7 @@ import math
 import random
 import time
 
+from app.services import nfc
 from app.services.scrapers.base import BaseScraper
 
 FAKE_RESULT_COUNT = 15
@@ -16,8 +17,12 @@ class FakeScraper(BaseScraper):
     def search(self, params, should_stop):
         rng = random.Random(f"{params.query}:{params.latitude:.4f}:{params.longitude:.4f}")
         delay = self.config.get("FAKE_SCRAPER_DELAY", 0)
+        filtering = params.max_rating is not None or params.max_reviews is not None
+        # When NFC caps are on, open up to FAKE_RESULT_COUNT places and only count matches.
+        limit = FAKE_RESULT_COUNT if filtering else min(params.max_results, FAKE_RESULT_COUNT)
+        yielded = 0
 
-        for i in range(min(params.max_results, FAKE_RESULT_COUNT)):
+        for i in range(limit):
             if should_stop():
                 return
             if delay:
@@ -30,8 +35,7 @@ class FakeScraper(BaseScraper):
                 111_320 * math.cos(math.radians(params.latitude))
             )
             has_website = rng.random() < 0.6
-
-            yield {
+            business = {
                 "place_id": f"fake:{params.query}:{params.latitude:.4f}:{params.longitude:.4f}:{i}",
                 "name": f"{params.query.title()} #{i + 1}",
                 "category": params.query.title(),
@@ -48,3 +52,11 @@ class FakeScraper(BaseScraper):
                 "review_count": rng.randint(3, 400),
                 "maps_url": None,
             }
+            if not nfc.matches_review_limits(
+                business["rating"], business["review_count"], params.max_rating, params.max_reviews
+            ):
+                continue
+            yield business
+            yielded += 1
+            if yielded >= params.max_results:
+                return

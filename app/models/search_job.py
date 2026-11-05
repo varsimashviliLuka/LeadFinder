@@ -39,6 +39,10 @@ class SearchJob(db.Model):
 
     find_socials = db.Column(db.Boolean, nullable=False, default=False)
     collect_reviews = db.Column(db.Boolean, nullable=False, default=False)
+    # When set, only businesses at or below these Google rating / review caps are kept
+    # (typical NFC card prospects). Null means no cap on that field.
+    max_rating = db.Column(db.Float)
+    max_reviews = db.Column(db.Integer)
     stage = db.Column(db.String(32))
     socials_total = db.Column(db.Integer, nullable=False, default=0)
     socials_checked = db.Column(db.Integer, nullable=False, default=0)

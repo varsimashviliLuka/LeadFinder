@@ -10,6 +10,8 @@ class SearchParams:
     max_results: int
     language: str = "ka"
     collect_reviews: bool = False
+    max_rating: float | None = None
+    max_reviews: int | None = None
 
 
 class BaseScraper:

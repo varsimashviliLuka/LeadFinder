@@ -152,6 +152,31 @@
           </span>
         </label>
 
+        <label class="social-toggle d-flex gap-2 mb-2" for="nfc-filter-input">
+          <input id="nfc-filter-input" type="checkbox" class="form-check-input mt-1 flex-shrink-0">
+          <span>
+            <span class="fw-semibold small d-block">
+              <i class="bi bi-credit-card-2-front"></i> Only NFC card prospects
+            </span>
+            <span class="small text-body-secondary">Skip businesses that already have a strong Google rating or lots of
+              reviews. The search keeps looking until it finds enough that match, or the list runs out.</span>
+          </span>
+        </label>
+        <div id="nfc-filter-options" class="nfc-filter-options d-none mb-3">
+          <div class="row g-2">
+            <div class="col-6">
+              <label for="max-rating-input" class="small text-body-secondary mb-1">Max Google rating</label>
+              <input id="max-rating-input" type="number" class="form-control form-control-sm"
+                     min="1" max="5" step="0.1" value="4.3" inputmode="decimal">
+            </div>
+            <div class="col-6">
+              <label for="max-reviews-input" class="small text-body-secondary mb-1">Max reviews</label>
+              <input id="max-reviews-input" type="number" class="form-control form-control-sm"
+                     min="0" max="10000" step="1" value="50" inputmode="numeric">
+            </div>
+          </div>
+        </div>
+
         <div class="search-summary mb-3" id="search-summary"></div>
 
         <button id="search-submit" type="submit" class="btn btn-primary btn-lg w-100 mt-auto" disabled>

@@ -61,6 +61,9 @@ def create_search_job(payload):
         if not isinstance(value, bool):
             raise ValueError(f"{key} must be true or false")
 
+    max_rating = _number(payload, "max_rating", float, low=1.0, high=5.0)
+    max_reviews = _number(payload, "max_reviews", int, low=0, high=10_000)
+
     radius_low, radius_high = config["SEARCH_RADIUS_RANGE"]
     results_low, results_high = config["SEARCH_MAX_RESULTS_RANGE"]
     job = SearchJob(
@@ -72,6 +75,8 @@ def create_search_job(payload):
         max_results=_number(payload, "max_results", int, 50, results_low, results_high),
         find_socials=find_socials,
         collect_reviews=collect_reviews,
+        max_rating=max_rating,
+        max_reviews=max_reviews,
     )
     db.session.add(job)
     db.session.commit()

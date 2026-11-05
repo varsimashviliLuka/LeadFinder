@@ -208,3 +208,48 @@ def test_empty_search_explains_why(client, monkeypatch):
     job = client.post("/api/searches", json={"query": "cafe", **TBILISI}).get_json()
     assert job["status"] == "completed"
     assert job["error"] == "none inside the 1.0 km circle"
+
+
+def test_nfc_rating_review_filter_keeps_only_matches(client, monkeypatch):
+    class MixedRatings(BaseScraper):
+        def search(self, params, should_stop):
+            assert params.max_rating == 4.2
+            assert params.max_reviews == 40
+            places = [
+                {"place_id": "hot", "name": "Busy Cafe", "rating": 4.8, "review_count": 200},
+                {"place_id": "quiet", "name": "Quiet Cafe", "rating": 3.9, "review_count": 12},
+                {"place_id": "mid", "name": "Ok Cafe", "rating": 4.5, "review_count": 20},
+                {"place_id": "new", "name": "Brand New", "rating": None, "review_count": None},
+                {"place_id": "border", "name": "Border Cafe", "rating": 4.2, "review_count": 40},
+            ]
+            for place in places:
+                if should_stop():
+                    return
+                yield place
+
+    monkeypatch.setattr("app.workers.runner.get_scraper", lambda name, config: MixedRatings(config))
+    job = client.post(
+        "/api/searches",
+        json={"query": "cafe", **TBILISI, "max_results": 10, "max_rating": 4.2, "max_reviews": 40},
+    ).get_json()
+    assert job["status"] == "completed"
+    assert job["max_rating"] == 4.2
+    assert job["max_reviews"] == 40
+    assert job["results_found"] == 3
+    names = {b["name"] for b in client.get(f"/api/businesses?search_job_id={job['id']}&per_page=50").get_json()["items"]}
+    assert names == {"Quiet Cafe", "Brand New", "Border Cafe"}
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"query": "cafe", **TBILISI, "max_rating": 0.5},
+        {"query": "cafe", **TBILISI, "max_rating": 5.5},
+        {"query": "cafe", **TBILISI, "max_reviews": -1},
+        {"query": "cafe", **TBILISI, "max_reviews": 1.5},
+        {"query": "cafe", **TBILISI, "max_rating": "low"},
+    ],
+)
+def test_nfc_filter_validation(client, payload):
+    assert client.post("/api/searches", json=payload).status_code == 400
+    assert db.session.query(SearchJob).count() == 0

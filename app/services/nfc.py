@@ -17,6 +17,15 @@ GOOGLE_PLACE_ID_RE = re.compile(r"^ChIJ[\w-]{10,}$")
 WRITE_REVIEW_URL = "https://search.google.com/local/writereview?placeid={}"
 
 
+def matches_review_limits(rating, review_count, max_rating=None, max_reviews=None):
+    """True when optional search caps are met. Missing rating/reviews count as a match."""
+    if max_rating is not None and rating is not None and rating > max_rating:
+        return False
+    if max_reviews is not None and review_count is not None and review_count > max_reviews:
+        return False
+    return True
+
+
 def prospect_reasons(business, today=None):
     """Plain-language reasons this business would benefit from more Google reviews."""
     today = today or date.today()

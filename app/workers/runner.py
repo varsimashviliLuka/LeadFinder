@@ -9,7 +9,7 @@ from sqlalchemy import update
 from app.extensions import db
 from app.models import SearchJob, SearchJobStage, SearchJobStatus
 from app.models.common import utcnow
-from app.services import socials
+from app.services import nfc, socials
 from app.services.businesses import needs_online_check, upsert_business
 from app.services.scrapers import SearchParams, get_scraper
 
@@ -169,6 +169,8 @@ class JobRunner:
             max_results=job.max_results,
             language=self.app.config["SCRAPER_LANGUAGE"],
             collect_reviews=job.collect_reviews,
+            max_rating=job.max_rating,
+            max_reviews=job.max_reviews,
         )
 
         def should_stop():
@@ -179,6 +181,10 @@ class JobRunner:
             for data in results:
                 if should_stop():
                     break
+                if not nfc.matches_review_limits(
+                    data.get("rating"), data.get("review_count"), job.max_rating, job.max_reviews
+                ):
+                    continue
                 try:
                     _, created = upsert_business(data, job)
                 except ValueError as exc:

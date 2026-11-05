@@ -35,6 +35,12 @@ search_create_model = ns.model(
         "collect_reviews": fields.Boolean(
             default=False, description="Read each place's newest reviews (latest review date, owner replies)"
         ),
+        "max_rating": fields.Float(
+            description="Only keep businesses rated at most this (1–5). Omit for no rating cap."
+        ),
+        "max_reviews": fields.Integer(
+            description="Only keep businesses with at most this many Google reviews. Omit for no review cap."
+        ),
     },
 )
 
@@ -53,6 +59,8 @@ search_job_model = ns.model(
         "results_new": fields.Integer,
         "find_socials": fields.Boolean,
         "collect_reviews": fields.Boolean,
+        "max_rating": fields.Float,
+        "max_reviews": fields.Integer,
         "stage": fields.String(enum=list(SearchJobStage.ALL), description="What a running job is doing now"),
         "socials_total": fields.Integer(description="Businesses queued for the social media lookup"),
         "socials_checked": fields.Integer,

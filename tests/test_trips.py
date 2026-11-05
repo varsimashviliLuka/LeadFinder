@@ -276,6 +276,15 @@ def test_nfc_prospect_reasons():
     assert nfc.review_url(Business(place_id="fake-123")) is None
 
 
+def test_matches_review_limits():
+    assert nfc.matches_review_limits(4.0, 10, max_rating=4.3, max_reviews=50)
+    assert nfc.matches_review_limits(4.3, 50, max_rating=4.3, max_reviews=50)
+    assert not nfc.matches_review_limits(4.4, 10, max_rating=4.3, max_reviews=50)
+    assert not nfc.matches_review_limits(4.0, 51, max_rating=4.3, max_reviews=50)
+    assert nfc.matches_review_limits(None, None, max_rating=4.3, max_reviews=50)
+    assert nfc.matches_review_limits(5.0, 900, max_rating=None, max_reviews=None)
+
+
 def test_nfc_filter_qr_and_services(client, shops):
     shops[0].review_count = 8
     db.session.commit()

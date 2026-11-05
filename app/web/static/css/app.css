@@ -593,6 +593,14 @@ body,
   background: var(--accent-soft);
 }
 
+.nfc-filter-options {
+  margin-left: 1.65rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-soft);
+  background: var(--bs-body-bg);
+}
+
 .social-row {
   display: flex;
   align-items: center;

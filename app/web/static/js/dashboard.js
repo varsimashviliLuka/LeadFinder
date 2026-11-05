@@ -226,6 +226,69 @@ collectReviewsInput.addEventListener("change", () => {
   updateSteps();
 });
 
+const nfcFilterInput = document.getElementById("nfc-filter-input");
+const nfcFilterOptions = document.getElementById("nfc-filter-options");
+const maxRatingInput = document.getElementById("max-rating-input");
+const maxReviewsInput = document.getElementById("max-reviews-input");
+const NFC_DEFAULT_MAX_RATING = 4.3;
+const NFC_DEFAULT_MAX_REVIEWS = 50;
+
+function nfcFilterOn() {
+  return nfcFilterInput.checked;
+}
+
+function nfcMaxRating() {
+  const value = Number(maxRatingInput.value);
+  if (!Number.isFinite(value) || value < 1 || value > 5) return null;
+  return Math.round(value * 10) / 10;
+}
+
+function nfcMaxReviews() {
+  const value = Number(maxReviewsInput.value);
+  if (!Number.isFinite(value) || value < 0 || value !== Math.floor(value)) return null;
+  return value;
+}
+
+function syncNfcFilterUi() {
+  nfcFilterOptions.classList.toggle("d-none", !nfcFilterOn());
+  if (nfcFilterOn()) {
+    if (maxRatingInput.value === "") maxRatingInput.value = String(NFC_DEFAULT_MAX_RATING);
+    if (maxReviewsInput.value === "") maxReviewsInput.value = String(NFC_DEFAULT_MAX_REVIEWS);
+  }
+  updateSteps();
+}
+
+nfcFilterInput.checked = localStorage.getItem("nfcFilter") === "true";
+const savedMaxRating = localStorage.getItem("nfcMaxRating");
+const savedMaxReviews = localStorage.getItem("nfcMaxReviews");
+if (savedMaxRating) maxRatingInput.value = savedMaxRating;
+if (savedMaxReviews) maxReviewsInput.value = savedMaxReviews;
+nfcFilterInput.addEventListener("change", () => {
+  localStorage.setItem("nfcFilter", String(nfcFilterInput.checked));
+  syncNfcFilterUi();
+});
+maxRatingInput.addEventListener("change", () => {
+  const value = nfcMaxRating();
+  if (value == null) {
+    maxRatingInput.value = String(NFC_DEFAULT_MAX_RATING);
+  } else {
+    maxRatingInput.value = String(value);
+    localStorage.setItem("nfcMaxRating", String(value));
+  }
+  updateSteps();
+});
+maxReviewsInput.addEventListener("change", () => {
+  const value = nfcMaxReviews();
+  if (value == null) {
+    maxReviewsInput.value = String(NFC_DEFAULT_MAX_REVIEWS);
+  } else {
+    maxReviewsInput.value = String(value);
+    localStorage.setItem("nfcMaxReviews", String(value));
+  }
+  updateSteps();
+});
+syncNfcFilterUi();
+
 function estimateMinutes() {
   const n = state.categories.length;
   const perBusiness = SECONDS_PER_BUSINESS
@@ -251,9 +314,13 @@ function updateSteps() {
     return;
   }
   const types = state.categories.map((c) => `<strong>${esc(c)}</strong>`).join(", ");
+  const nfcLine = nfcFilterOn()
+    ? `<div class="mb-1"><i class="bi bi-credit-card-2-front text-body-secondary"></i> Only NFC prospects: rating ≤ ${nfcMaxRating() ?? NFC_DEFAULT_MAX_RATING}, reviews ≤ ${nfcMaxReviews() ?? NFC_DEFAULT_MAX_REVIEWS}</div>`
+    : "";
   summary.innerHTML = `
     <div class="mb-1"><i class="bi bi-search text-body-secondary"></i> Look for ${types}</div>
     <div class="mb-1"><i class="bi bi-geo-alt text-body-secondary"></i> Within ${formatDistance(radiusMeters())} of <strong>${esc(state.label)}</strong></div>
+    ${nfcLine}
     ${collectReviewsInput.checked ? '<div class="mb-1"><i class="bi bi-chat-square-quote text-body-secondary"></i> Read each one\'s latest reviews</div>' : ""}
     ${findSocialsInput.checked ? '<div class="mb-1"><i class="bi bi-instagram text-body-secondary"></i> Then check their websites and find social media, email and WhatsApp</div>' : ""}
     <div><i class="bi bi-clock text-body-secondary"></i> Up to ${maxResultsInput.value} of each · roughly ${estimateMinutes()} min at most</div>`;
@@ -263,25 +330,32 @@ document.getElementById("search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!state.point || !state.categories.length) return;
 
+  if (nfcFilterOn() && (nfcMaxRating() == null || nfcMaxReviews() == null)) {
+    toast("Set a max Google rating (1–5) and max reviews for the NFC filter", "danger");
+    return;
+  }
+
   const submit = document.getElementById("search-submit");
   submit.disabled = true;
   submit.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Starting…';
   let started = 0;
   for (const query of state.categories) {
     try {
-      await api("/searches", {
-        method: "POST",
-        body: {
-          query,
-          latitude: state.point.lat,
-          longitude: state.point.lng,
-          location_text: state.label,
-          radius_m: radiusMeters(),
-          max_results: Number(maxResultsInput.value),
-          find_socials: findSocialsInput.checked,
-          collect_reviews: collectReviewsInput.checked,
-        },
-      });
+      const body = {
+        query,
+        latitude: state.point.lat,
+        longitude: state.point.lng,
+        location_text: state.label,
+        radius_m: radiusMeters(),
+        max_results: Number(maxResultsInput.value),
+        find_socials: findSocialsInput.checked,
+        collect_reviews: collectReviewsInput.checked,
+      };
+      if (nfcFilterOn()) {
+        body.max_rating = nfcMaxRating();
+        body.max_reviews = nfcMaxReviews();
+      }
+      await api("/searches", { method: "POST", body });
       started += 1;
     } catch (err) {
       toast(`"${query}": ${err.message}`, "danger");
@@ -334,13 +408,16 @@ function jobItem(job) {
     ? `${job.results_found} found
        <span data-bs-toggle="tooltip" title="Businesses that weren't already in your leads">· ${job.results_new} new</span>`
     : active ? (job.status === "pending" ? "Waiting for its turn…" : "Opening Google Maps…") : "Nothing found";
+  const nfcCaps = job.max_rating != null || job.max_reviews != null
+    ? ` · <span data-bs-toggle="tooltip" title="Only businesses within these Google rating / review caps were kept"><i class="bi bi-credit-card-2-front"></i> NFC ≤${job.max_rating ?? "any"}★ / ≤${job.max_reviews ?? "any"} reviews</span>`
+    : "";
 
   return `<div class="job-item">
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
       <div class="me-auto">
         <div class="fw-semibold text-capitalize">${esc(job.query)}</div>
         <div class="small text-body-secondary">
-          <i class="bi bi-geo-alt"></i> ${esc(area)} · ${formatDistance(job.radius_m)} · ${esc(fmtRelative(job.started_at || job.created_at))}
+          <i class="bi bi-geo-alt"></i> ${esc(area)} · ${formatDistance(job.radius_m)}${nfcCaps} · ${esc(fmtRelative(job.started_at || job.created_at))}
         </div>
       </div>
       <div class="d-flex align-items-center gap-2">
