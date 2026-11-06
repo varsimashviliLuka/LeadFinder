@@ -210,6 +210,99 @@ def test_empty_search_explains_why(client, monkeypatch):
     assert job["error"] == "none inside the 1.0 km circle"
 
 
+def test_create_polygon_search(client, monkeypatch):
+    seen = {}
+
+    class PolyScraper(BaseScraper):
+        def search(self, params, should_stop):
+            seen["params"] = params
+            yield {
+                "place_id": "in",
+                "name": "Inside",
+                "latitude": 41.711,
+                "longitude": 44.761,
+            }
+            yield {
+                "place_id": "out",
+                "name": "Outside",
+                "latitude": 41.73,
+                "longitude": 44.78,
+            }
+
+    monkeypatch.setattr("app.workers.runner.get_scraper", lambda name, config: PolyScraper(config))
+    # Diamond around 41.71, 44.76
+    ring = [
+        [41.715, 44.760],
+        [41.710, 44.765],
+        [41.705, 44.760],
+        [41.710, 44.755],
+        [41.715, 44.760],
+    ]
+    job = client.post(
+        "/api/searches",
+        json={"query": "cafe", "area_shape": "polygon", "polygon": ring, "max_results": 10},
+    ).get_json()
+    assert job["status"] == "completed"
+    assert job["area_shape"] == "polygon"
+    assert job["polygon"][0] == job["polygon"][-1]
+    assert seen["params"].area_shape == "polygon"
+    names = {b["name"] for b in client.get(f"/api/businesses?search_job_id={job['id']}&per_page=50").get_json()["items"]}
+    assert names == {"Inside"}
+
+
+def test_create_rectangle_search(client, monkeypatch):
+    seen = {}
+
+    class BoxScraper(BaseScraper):
+        def search(self, params, should_stop):
+            seen["params"] = params
+            yield {
+                "place_id": "inside",
+                "name": "Inside",
+                "latitude": 41.71,
+                "longitude": 44.76,
+            }
+
+    monkeypatch.setattr("app.workers.runner.get_scraper", lambda name, config: BoxScraper(config))
+    job = client.post(
+        "/api/searches",
+        json={
+            "query": "cafe",
+            "area_shape": "rectangle",
+            "south": 41.70,
+            "west": 44.75,
+            "north": 41.72,
+            "east": 44.77,
+            "max_results": 5,
+        },
+    ).get_json()
+    assert job["status"] == "completed"
+    assert job["area_shape"] == "rectangle"
+    assert job["south"] == 41.70 and job["east"] == 44.77
+    assert abs(job["latitude"] - 41.71) < 1e-9
+    assert abs(job["longitude"] - 44.76) < 1e-9
+    assert job["radius_m"] > 0
+    assert seen["params"].area_shape == "rectangle"
+    assert seen["params"].south == 41.70
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"query": "cafe", "area_shape": "rectangle", "south": 41.7, "west": 44.7, "north": 41.7, "east": 44.8},
+        {"query": "cafe", "area_shape": "rectangle"},
+        {"query": "cafe", "area_shape": "triangle", **TBILISI},
+        {"query": "cafe", "area_shape": "rectangle", "south": 41.0, "west": 44.0, "north": 42.5, "east": 45.5},
+        {"query": "cafe", "area_shape": "polygon"},
+        {"query": "cafe", "area_shape": "polygon", "polygon": [[41.7, 44.7], [41.71, 44.7]]},
+        {"query": "cafe", "area_shape": "polygon", "polygon": [[41.0, 44.0], [42.5, 44.0], [42.5, 45.5], [41.0, 45.5]]},
+    ],
+)
+def test_area_shape_validation(client, payload):
+    assert client.post("/api/searches", json=payload).status_code == 400
+    assert db.session.query(SearchJob).count() == 0
+
+
 def test_nfc_rating_review_filter_keeps_only_matches(client, monkeypatch):
     class MixedRatings(BaseScraper):
         def search(self, params, should_stop):

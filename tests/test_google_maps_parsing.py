@@ -78,6 +78,44 @@ def test_distance_and_zoom():
     assert zoom_for_radius(50_000, 41.7) == 11
 
 
+def test_search_area_circle_and_rectangle():
+    from app.services import search_area
+
+    assert search_area.contains(
+        41.71, 44.76, shape="circle", latitude=41.71, longitude=44.76, radius_m=500
+    )
+    assert not search_area.contains(
+        41.73, 44.76, shape="circle", latitude=41.71, longitude=44.76, radius_m=500
+    )
+    assert search_area.contains(
+        41.71, 44.76, shape="rectangle", latitude=41.71, longitude=44.76, radius_m=2000,
+        south=41.70, west=44.75, north=41.72, east=44.77,
+    )
+    assert not search_area.contains(
+        41.73, 44.76, shape="rectangle", latitude=41.71, longitude=44.76, radius_m=2000,
+        south=41.70, west=44.75, north=41.72, east=44.77,
+    )
+    south, west, north, east = search_area.normalize_bounds(41.72, 44.77, 41.70, 44.75)
+    assert (south, west, north, east) == (41.70, 44.75, 41.72, 44.77)
+    assert "rectangle" in search_area.area_description("rectangle", 1000, 41.70, 44.75, 41.72, 44.77)
+
+
+def test_search_area_polygon():
+    from app.services import search_area
+
+    ring, south, west, north, east = search_area.normalize_polygon(
+        [[41.715, 44.760], [41.710, 44.765], [41.705, 44.760], [41.710, 44.755]]
+    )
+    assert ring[0] == ring[-1]
+    assert south < north and west < east
+    assert search_area.point_in_polygon(41.711, 44.761, ring)
+    assert not search_area.point_in_polygon(41.73, 44.78, ring)
+    assert search_area.contains(
+        41.711, 44.761, shape="polygon", latitude=41.71, longitude=44.76, radius_m=1000, polygon=ring
+    )
+    assert "drawn area" in search_area.area_description("polygon", 1000, polygon=ring)
+
+
 def test_build_business():
     details = {
         "name": "Dental Clinic - Dental care",

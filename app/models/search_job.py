@@ -30,6 +30,14 @@ class SearchJob(db.Model):
     latitude = db.Column(db.Float, nullable=False)
     longitude = db.Column(db.Float, nullable=False)
     radius_m = db.Column(db.Integer, nullable=False, default=2000)
+    # circle: lat/lng + radius_m; rectangle: south/west/north/east; polygon: ring + bbox.
+    area_shape = db.Column(db.String(16), nullable=False, default="circle")
+    south = db.Column(db.Float)
+    west = db.Column(db.Float)
+    north = db.Column(db.Float)
+    east = db.Column(db.Float)
+    # Closed ring of [lat, lng] points for freehand draw mode.
+    polygon = db.Column(db.JSON)
     max_results = db.Column(db.Integer, nullable=False, default=50)
 
     status = db.Column(db.String(32), nullable=False, default=SearchJobStatus.PENDING, index=True)

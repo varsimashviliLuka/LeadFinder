@@ -4,7 +4,7 @@ from sqlalchemy import delete, update
 from app.extensions import db
 from app.models import SearchJob, SearchJobStatus
 from app.models.common import utcnow
-from app.services import geocoding
+from app.services import geocoding, search_area
 
 
 def _number(payload, key, kind, default=None, low=None, high=None):
@@ -24,23 +24,63 @@ def _number(payload, key, kind, default=None, low=None, high=None):
     return value
 
 
-def create_search_job(payload):
-    """Validate a search request and save it as a pending job.
+def _check_covering_radius(radius_m, radius_low, radius_high, kind):
+    if radius_m < radius_low or radius_m > radius_high:
+        raise ValueError(
+            f"{kind} is too {'small' if radius_m < radius_low else 'large'}; "
+            f"draw an area roughly {radius_low}–{radius_high} m across"
+        )
 
-    Coordinates win when given; otherwise location_text is geocoded.
-    Raises ValueError for bad input and GeocodingError if lookup fails.
-    """
-    config = current_app.config
 
-    query = payload.get("query")
-    if not isinstance(query, str) or not query.strip():
-        raise ValueError("query is required, e.g. 'restaurant' or 'beauty salon'")
-    query = query.strip()
+def _area_fields(payload, config):
+    """Resolve circle, rectangle or polygon into lat/lng, radius and optional geometry."""
+    radius_low, radius_high = config["SEARCH_RADIUS_RANGE"]
+    shape = payload.get("area_shape", search_area.AREA_CIRCLE)
+    if shape is None:
+        shape = search_area.AREA_CIRCLE
+    if not isinstance(shape, str) or shape not in search_area.AREA_SHAPES:
+        raise ValueError(f"area_shape must be one of: {', '.join(search_area.AREA_SHAPES)}")
 
     location_text = payload.get("location_text")
     if location_text is not None and not isinstance(location_text, str):
         raise ValueError("location_text must be a string")
     location_text = (location_text or "").strip() or None
+
+    if shape == search_area.AREA_RECTANGLE:
+        south, west, north, east = search_area.normalize_bounds(
+            payload.get("south"), payload.get("west"), payload.get("north"), payload.get("east")
+        )
+        radius_m = search_area.covering_radius_m(south, west, north, east)
+        _check_covering_radius(radius_m, radius_low, radius_high, "Rectangle")
+        return {
+            "location_text": location_text,
+            "latitude": (south + north) / 2,
+            "longitude": (west + east) / 2,
+            "radius_m": radius_m,
+            "area_shape": shape,
+            "south": south,
+            "west": west,
+            "north": north,
+            "east": east,
+            "polygon": None,
+        }
+
+    if shape == search_area.AREA_POLYGON:
+        ring, south, west, north, east = search_area.normalize_polygon(payload.get("polygon"))
+        radius_m = search_area.covering_radius_m(south, west, north, east)
+        _check_covering_radius(radius_m, radius_low, radius_high, "Drawn shape")
+        return {
+            "location_text": location_text,
+            "latitude": (south + north) / 2,
+            "longitude": (west + east) / 2,
+            "radius_m": radius_m,
+            "area_shape": shape,
+            "south": south,
+            "west": west,
+            "north": north,
+            "east": east,
+            "polygon": ring,
+        }
 
     latitude = _number(payload, "latitude", float, low=-90, high=90)
     longitude = _number(payload, "longitude", float, low=-180, high=180)
@@ -55,6 +95,33 @@ def create_search_job(payload):
             raise ValueError(f"Could not find a location for {location_text!r}")
         latitude, longitude = matches[0].latitude, matches[0].longitude
 
+    return {
+        "location_text": location_text,
+        "latitude": latitude,
+        "longitude": longitude,
+        "radius_m": _number(payload, "radius_m", int, 2000, radius_low, radius_high),
+        "area_shape": search_area.AREA_CIRCLE,
+        "south": None,
+        "west": None,
+        "north": None,
+        "east": None,
+        "polygon": None,
+    }
+
+
+def create_search_job(payload):
+    """Validate a search request and save it as a pending job.
+
+    Coordinates win when given; otherwise location_text is geocoded.
+    Raises ValueError for bad input and GeocodingError if lookup fails.
+    """
+    config = current_app.config
+
+    query = payload.get("query")
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("query is required, e.g. 'restaurant' or 'beauty salon'")
+    query = query.strip()
+
     find_socials = payload.get("find_socials", False)
     collect_reviews = payload.get("collect_reviews", False)
     for key, value in (("find_socials", find_socials), ("collect_reviews", collect_reviews)):
@@ -64,14 +131,10 @@ def create_search_job(payload):
     max_rating = _number(payload, "max_rating", float, low=1.0, high=5.0)
     max_reviews = _number(payload, "max_reviews", int, low=0, high=10_000)
 
-    radius_low, radius_high = config["SEARCH_RADIUS_RANGE"]
     results_low, results_high = config["SEARCH_MAX_RESULTS_RANGE"]
     job = SearchJob(
         query=query,
-        location_text=location_text,
-        latitude=latitude,
-        longitude=longitude,
-        radius_m=_number(payload, "radius_m", int, 2000, radius_low, radius_high),
+        **_area_fields(payload, config),
         max_results=_number(payload, "max_results", int, 50, results_low, results_high),
         find_socials=find_socials,
         collect_reviews=collect_reviews,

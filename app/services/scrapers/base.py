@@ -12,6 +12,12 @@ class SearchParams:
     collect_reviews: bool = False
     max_rating: float | None = None
     max_reviews: int | None = None
+    area_shape: str = "circle"
+    south: float | None = None
+    west: float | None = None
+    north: float | None = None
+    east: float | None = None
+    polygon: list | None = None
 
 
 class BaseScraper:

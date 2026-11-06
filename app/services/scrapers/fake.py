@@ -2,7 +2,7 @@ import math
 import random
 import time
 
-from app.services import nfc
+from app.services import nfc, search_area
 from app.services.scrapers.base import BaseScraper
 
 FAKE_RESULT_COUNT = 15
@@ -28,12 +28,18 @@ class FakeScraper(BaseScraper):
             if delay:
                 time.sleep(delay)
 
-            distance = rng.uniform(0, params.radius_m)
-            bearing = rng.uniform(0, 2 * math.pi)
-            lat = params.latitude + (distance * math.cos(bearing)) / 111_320
-            lng = params.longitude + (distance * math.sin(bearing)) / (
-                111_320 * math.cos(math.radians(params.latitude))
-            )
+            if params.area_shape in ("rectangle", "polygon") and None not in (
+                params.south, params.west, params.north, params.east
+            ):
+                lat = rng.uniform(params.south, params.north)
+                lng = rng.uniform(params.west, params.east)
+            else:
+                distance = rng.uniform(0, params.radius_m)
+                bearing = rng.uniform(0, 2 * math.pi)
+                lat = params.latitude + (distance * math.cos(bearing)) / 111_320
+                lng = params.longitude + (distance * math.sin(bearing)) / (
+                    111_320 * math.cos(math.radians(params.latitude))
+                )
             has_website = rng.random() < 0.6
             business = {
                 "place_id": f"fake:{params.query}:{params.latitude:.4f}:{params.longitude:.4f}:{i}",
@@ -52,6 +58,20 @@ class FakeScraper(BaseScraper):
                 "review_count": rng.randint(3, 400),
                 "maps_url": None,
             }
+            if not search_area.contains(
+                business["latitude"],
+                business["longitude"],
+                shape=params.area_shape,
+                latitude=params.latitude,
+                longitude=params.longitude,
+                radius_m=params.radius_m,
+                south=params.south,
+                west=params.west,
+                north=params.north,
+                east=params.east,
+                polygon=params.polygon,
+            ):
+                continue
             if not nfc.matches_review_limits(
                 business["rating"], business["review_count"], params.max_rating, params.max_reviews
             ):

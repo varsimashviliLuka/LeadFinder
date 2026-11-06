@@ -9,7 +9,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
-from app.services import nfc
+from app.services import nfc, search_area
 from app.services.scrapers.base import BaseScraper
 from app.services.scrapers.human import Human
 from app.services.scrapers.pacing import ScraperBlockedError, ScraperLimitError, ScraperState
@@ -181,16 +181,39 @@ def normalize_phone(raw, region="GE"):
 
 
 def distance_m(lat1, lng1, lat2, lng2):
-    radius = 6_371_000
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    d_phi = math.radians(lat2 - lat1)
-    d_lambda = math.radians(lng2 - lng1)
-    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
-    return 2 * radius * math.asin(math.sqrt(a))
+    return search_area.distance_m(lat1, lng1, lat2, lng2)
 
 
 def format_distance(meters):
     return f"{meters / 1000:.1f} km" if meters >= 1000 else f"{meters:.0f} m"
+
+
+def _in_area(params, lat, lng):
+    return search_area.contains(
+        lat,
+        lng,
+        shape=params.area_shape,
+        latitude=params.latitude,
+        longitude=params.longitude,
+        radius_m=params.radius_m,
+        south=params.south,
+        west=params.west,
+        north=params.north,
+        east=params.east,
+        polygon=params.polygon,
+    )
+
+
+def _area_label(params):
+    return search_area.area_description(
+        params.area_shape,
+        params.radius_m,
+        params.south,
+        params.west,
+        params.north,
+        params.east,
+        params.polygon,
+    )
 
 
 def zoom_for_radius(radius_m, latitude):
@@ -348,14 +371,14 @@ class GoogleMapsScraper(BaseScraper):
             if skipped_distances:
                 ordered = sorted(skipped_distances)
                 logger.info(
-                    "%s. Skipped %d results outside %dm: closest %.0fm, median %.0fm",
-                    why, len(ordered), params.radius_m, ordered[0], ordered[len(ordered) // 2],
+                    "%s. Skipped %d results outside the search area: closest %.0fm, median %.0fm",
+                    why, len(ordered), ordered[0], ordered[len(ordered) // 2],
                 )
             if not opened and skipped_distances:
                 self.stop_reason = (
                     f"Google listed {len(skipped_distances)} places for this search, but none inside the "
-                    f"{format_distance(params.radius_m)} circle (the closest was "
-                    f"{format_distance(min(skipped_distances))} away). Try a bigger circle or move the pin."
+                    f"{_area_label(params)} (the closest was "
+                    f"{format_distance(min(skipped_distances))} away). Try a bigger area or move it."
                 )
 
         while not should_stop():
@@ -367,14 +390,10 @@ class GoogleMapsScraper(BaseScraper):
                 parsed = parse_place_link(link["href"])
                 if not parsed:
                     continue
-                distance = (
-                    distance_m(params.latitude, params.longitude, parsed["latitude"], parsed["longitude"])
-                    if parsed["latitude"] is not None
-                    else None
-                )
-                if distance is not None and distance > params.radius_m:
+                lat, lng = parsed.get("latitude"), parsed.get("longitude")
+                if lat is not None and lng is not None and not _in_area(params, lat, lng):
                     out_of_radius_streak += 1
-                    skipped_distances.append(distance)
+                    skipped_distances.append(distance_m(params.latitude, params.longitude, lat, lng))
                     continue
                 out_of_radius_streak = 0
 
@@ -431,7 +450,7 @@ class GoogleMapsScraper(BaseScraper):
                 return
             streak_limit = OUT_OF_RADIUS_STREAK_LIMIT if opened else OUT_OF_RADIUS_STREAK_LIMIT_BEFORE_FIRST
             if out_of_radius_streak >= streak_limit:
-                note_far_results(f"Results have moved outside the {params.radius_m}m radius; stopping")
+                note_far_results(f"Results have moved outside the {_area_label(params)}; stopping")
                 return
 
             before = len(links)

@@ -601,6 +601,24 @@ body,
   background: var(--bs-body-bg);
 }
 
+.area-shape-toggle .btn.active,
+.area-shape-toggle .btn.active:hover,
+.area-shape-toggle .btn.active:focus {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: none;
+}
+
+.area-shape-toggle .btn:not(.active) {
+  background: var(--bs-body-bg);
+  color: var(--bs-body-color);
+}
+
+#search-map.is-drawing {
+  cursor: crosshair;
+}
+
 .social-row {
   display: flex;
   align-items: center;

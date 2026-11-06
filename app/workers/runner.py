@@ -9,7 +9,7 @@ from sqlalchemy import update
 from app.extensions import db
 from app.models import SearchJob, SearchJobStage, SearchJobStatus
 from app.models.common import utcnow
-from app.services import nfc, socials
+from app.services import nfc, search_area, socials
 from app.services.businesses import needs_online_check, upsert_business
 from app.services.scrapers import SearchParams, get_scraper
 
@@ -171,6 +171,12 @@ class JobRunner:
             collect_reviews=job.collect_reviews,
             max_rating=job.max_rating,
             max_reviews=job.max_reviews,
+            area_shape=job.area_shape or "circle",
+            south=job.south,
+            west=job.west,
+            north=job.north,
+            east=job.east,
+            polygon=job.polygon,
         )
 
         def should_stop():
@@ -181,6 +187,20 @@ class JobRunner:
             for data in results:
                 if should_stop():
                     break
+                if not search_area.contains(
+                    data.get("latitude"),
+                    data.get("longitude"),
+                    shape=params.area_shape,
+                    latitude=params.latitude,
+                    longitude=params.longitude,
+                    radius_m=params.radius_m,
+                    south=params.south,
+                    west=params.west,
+                    north=params.north,
+                    east=params.east,
+                    polygon=params.polygon,
+                ):
+                    continue
                 if not nfc.matches_review_limits(
                     data.get("rating"), data.get("review_count"), job.max_rating, job.max_reviews
                 ):

@@ -45,12 +45,23 @@
           <span class="step-number">1</span>
           <div>
             <div class="section-title">Where should we look?</div>
-            <p class="section-hint">Search an address, use your current location, or click anywhere on the map. You can drag the pin.</p>
+            <p class="section-hint">Choose circle, rectangle, or freehand draw. For rectangle and draw, right-click-drag to shape the area; left-drag still moves the map.</p>
           </div>
         </div>
 
-        <div class="d-flex flex-wrap gap-2 mb-3">
-          <div class="position-relative flex-grow-1" style="min-width: 240px">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+          <div class="btn-group area-shape-toggle" role="group" aria-label="Search area shape">
+            <button type="button" class="btn btn-sm btn-outline-primary active" id="shape-circle" data-shape="circle">
+              <i class="bi bi-circle"></i> Circle
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="shape-rectangle" data-shape="rectangle">
+              <i class="bi bi-square"></i> Rectangle
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="shape-polygon" data-shape="polygon">
+              <i class="bi bi-pencil"></i> Draw
+            </button>
+          </div>
+          <div class="position-relative flex-grow-1" style="min-width: 220px">
             <div class="input-group">
               <span class="input-group-text bg-transparent"><i class="bi bi-geo-alt"></i></span>
               <input id="address-input" type="text" class="form-control" placeholder="e.g. Vake, Tbilisi or Rustaveli Avenue" autocomplete="off">
@@ -70,7 +81,7 @@
             <div class="small text-body-secondary">Selected area</div>
             <div id="location-label" class="fw-semibold text-truncate">Nothing selected yet</div>
           </div>
-          <div class="col-md-6">
+          <div class="col-md-6" id="circle-controls">
             <label for="radius-input" class="small text-body-secondary d-flex justify-content-between">
               <span>How far around this point?
                 <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
@@ -79,6 +90,26 @@
               <span class="fw-semibold text-body" id="radius-value">1 km</span>
             </label>
             <input id="radius-input" type="range" class="form-range" min="200" max="10000" step="100" value="1000">
+          </div>
+          <div class="col-md-6 d-none" id="rectangle-controls">
+            <div class="small text-body-secondary mb-1">
+              Right-click and drag to draw · left-drag to move the map
+              <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                 title="Only businesses inside the blue rectangle are collected. Right-drag again, or use Redraw, to change it."></i>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="redraw-rectangle" disabled>
+              <i class="bi bi-arrow-counterclockwise"></i> Redraw rectangle
+            </button>
+          </div>
+          <div class="col-md-6 d-none" id="polygon-controls">
+            <div class="small text-body-secondary mb-1">
+              Right-click and drag to sketch a shape · left-drag to move the map
+              <i class="bi bi-question-circle help-icon" data-bs-toggle="tooltip"
+                 title="Only businesses inside your drawn shape are collected. Right-drag again, or use Redraw, to change it."></i>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="redraw-polygon" disabled>
+              <i class="bi bi-arrow-counterclockwise"></i> Redraw shape
+            </button>
           </div>
         </div>
       </div>

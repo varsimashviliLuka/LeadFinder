@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.api.common import json_body, page_model, paginate, pagination_parser
 from app.extensions import db
 from app.models import SearchJob, SearchJobStage, SearchJobStatus
+from app.services import search_area
 from app.services.geocoding import GeocodingError
 from app.services.scrapers.pacing import ScraperState
 from app.services.searches import (
@@ -26,7 +27,20 @@ search_create_model = ns.model(
         ),
         "latitude": fields.Float(example=41.7151),
         "longitude": fields.Float(example=44.7661),
-        "radius_m": fields.Integer(default=2000, description="100 to 50000 meters"),
+        "radius_m": fields.Integer(default=2000, description="Circle only: 100 to 50000 meters"),
+        "area_shape": fields.String(
+            default=search_area.AREA_CIRCLE,
+            enum=list(search_area.AREA_SHAPES),
+            description="circle, rectangle, or polygon (freehand draw)",
+        ),
+        "south": fields.Float(description="Rectangle / polygon south edge"),
+        "west": fields.Float(description="Rectangle / polygon west edge"),
+        "north": fields.Float(description="Rectangle / polygon north edge"),
+        "east": fields.Float(description="Rectangle / polygon east edge"),
+        "polygon": fields.List(
+            fields.List(fields.Float),
+            description="Closed ring of [lat, lng] points when area_shape=polygon",
+        ),
         "max_results": fields.Integer(default=50, description="1 to 200"),
         "find_socials": fields.Boolean(
             default=False,
@@ -53,6 +67,12 @@ search_job_model = ns.model(
         "latitude": fields.Float,
         "longitude": fields.Float,
         "radius_m": fields.Integer,
+        "area_shape": fields.String(enum=list(search_area.AREA_SHAPES)),
+        "south": fields.Float,
+        "west": fields.Float,
+        "north": fields.Float,
+        "east": fields.Float,
+        "polygon": fields.List(fields.List(fields.Float)),
         "max_results": fields.Integer,
         "status": fields.String(enum=list(SearchJobStatus.ALL)),
         "results_found": fields.Integer,
